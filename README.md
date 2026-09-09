@@ -1,15 +1,15 @@
-# Friskis Borg Player v1.4
+# Friskis Borg Player v1.4.2
 
-Statisk prototyp för att skapa, spara och köra pass utifrån Borg 6–20.
+Demo-version för test.
 
-## Nytt i v1.4
-- Träningsvyn visar passnamnet i stället för “SPINNING”.
-- “Tillsammans gör vi skillnad” är borttaget i träningsvyn.
-- Pausfunktionen stoppar nu faktiskt timern.
-- Sparade pass migreras från v1.3 till en stabil lagringsnyckel, så framtida versionsbyten inte ska nollställa biblioteket.
-- Friskis-loggan ligger kvar i alla vyer.
+## Nytt i v1.4.2
+- **Mina pass är nu startsidan** direkt när appen öppnas.
+- Headern på startsidan visar `MINA PASS` i stället för `SPINNING`.
+- Den överflödiga knappen `Mina pass` göms när man redan är på startsidan.
+- I träningsvyn visas fortfarande aktuellt passnamn.
+- Pausfixen från v1.4.1 är kvar.
+- Ett kort **8-minuters demopass** läggs automatiskt till, även för användare som redan har sparade pass.
+- Sparade egna pass ligger kvar i localStorage.
 
 ## GitHub Pages
 Lägg filerna i repositoryts root och använd Pages: `main` / `(root)`.
-
-Pass sparas lokalt i webbläsaren (localStorage).
