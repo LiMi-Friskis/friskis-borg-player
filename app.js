@@ -1,175 +1,29 @@
-const APP_VERSION = '1.2';
-const STORAGE_KEY = 'friskis-borg-workouts-v1';
 
-const borgColor = (borg) => {
-  if (borg <= 9) return '#2bb7b3';
-  if (borg <= 11) return '#37c86b';
-  if (borg <= 13) return '#b7d93d';
-  if (borg <= 15) return '#f2c84b';
-  if (borg <= 17) return '#f28b3c';
-  return '#e63a3a';
-};
-
-const borgLabel = (borg) => {
-  if (borg <= 8) return 'Mycket lätt';
-  if (borg <= 10) return 'Lätt';
-  if (borg <= 12) return 'Ganska lätt';
-  if (borg <= 14) return 'Något ansträngande';
-  if (borg <= 16) return 'Ansträngande';
-  if (borg <= 18) return 'Mycket ansträngande';
-  return 'Extremt ansträngande';
-};
-
-const demoWorkout = {
-  id: crypto.randomUUID(),
-  name: 'Spinning 45 – Intervall',
-  blocks: [
-    { duration: 300, borg: 10, name:'Uppvärmning', instruction:'Hitta rytmen' },
-    { duration: 240, borg: 12, name:'Stegring', instruction:'Öka successivt' },
-    { duration: 180, borg: 14, name:'Tempo', instruction:'Stabilt tryck' },
-    { duration: 180, borg: 16, name:'Backe', instruction:'Sittande tungt' },
-    { duration: 120, borg: 11, name:'Återhämtning', instruction:'Släpp motstånd' },
-    { duration: 120, borg: 15, name:'Tempo', instruction:'Kontrollerat hårt' },
-    { duration: 90, borg: 17, name:'Intervall', instruction:'Tryck på' },
-    { duration: 90, borg: 11, name:'Återhämtning', instruction:'Lugnt' },
-    { duration: 180, borg: 16, name:'Backe', instruction:'Stående / sittande' },
-    { duration: 60, borg: 18, name:'Peak', instruction:'Hårt men kontrollerat' },
-    { duration: 120, borg: 12, name:'Återhämtning', instruction:'Hitta andningen' },
-    { duration: 180, borg: 15, name:'Tempo', instruction:'Jämnt arbete' },
-    { duration: 60, borg: 17, name:'Intervall', instruction:'Sista hårda' },
-    { duration: 240, borg: 9, name:'Nedvarvning', instruction:'Lugnt hela vägen ner' },
-    { duration: 135, borg: 7, name:'Avslut', instruction:'Mycket lätt' }
-  ]
-};
-
-function loadWorkouts(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if(!raw){ localStorage.setItem(STORAGE_KEY, JSON.stringify([demoWorkout])); return [demoWorkout]; }
-  try { return JSON.parse(raw); } catch { return [demoWorkout]; }
-}
-function saveWorkouts(workouts){ localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts)); }
-function fmt(sec){
-  sec = Math.max(0, Math.round(sec));
-  const m = Math.floor(sec/60), s = sec%60;
-  return `${m}:${String(s).padStart(2,'0')}`;
-}
-function totalDuration(workout){ return workout.blocks.reduce((a,b)=>a+b.duration,0); }
-function heightForBorg(borg){ return Math.max(8, ((borg-6)/(20-6))*92 + 8); }
-
-const app = document.getElementById('app');
-let state = { view:'list', workouts: loadWorkouts(), editing:null, player:null };
-let timer = null;
-
-function nav(view){ state.view=view; render(); }
-function stopPlayerTimer(){
-  if(timer){ clearInterval(timer); timer=null; }
-}
-function startPlayerTimer(){
-  stopPlayerTimer();
-  const p=state.player;
-  if(!p || !p.running) return;
-  p.lastTick=performance.now();
-  timer=setInterval(()=>{
-    if(!state.player || !state.player.running){ stopPlayerTimer(); return; }
-    const now=performance.now();
-    const delta=(now-state.player.lastTick)/1000;
-    state.player.lastTick=now;
-    const total=totalDuration(state.player.workout);
-    state.player.elapsed=Math.min(total,state.player.elapsed+delta);
-    if(state.player.elapsed>=total){
-      state.player.running=false;
-      stopPlayerTimer();
-    }
-    renderPlayer();
-  },250);
-}
-function render(){
-  if(state.view!=='player') stopPlayerTimer();
-  if(state.view==='list') renderList();
-  if(state.view==='edit') renderEditor();
-  if(state.view==='player') renderPlayer();
-}
-
-function shell(content){
-  app.innerHTML = `<div class="app-shell"><div class="topbar"><div class="brand"><span>FRISKIS</span> BORG PLAYER</div><button class="btn ghost small" onclick="nav('list')">Mina pass</button></div><main class="container">${content}</main></div>`;
-}
-
-function profileHTML(workout, cls='mini-profile'){
-  const total=totalDuration(workout)||1;
-  return `<div class="${cls}">${workout.blocks.map(b=>`<div class="bar" title="${b.name} · Borg ${b.borg} · ${fmt(b.duration)}" style="height:${heightForBorg(b.borg)}%;background:${borgColor(b.borg)};width:${(b.duration/total)*100}%"></div>`).join('')}</div>`;
-}
-
-function renderList(){
-  shell(`<div class="hero-row"><div><h1>Mina pass</h1><p class="muted">Välj ett sparat pass eller skapa ett nytt.</p></div><button class="btn primary" onclick="newWorkout()">+ Skapa nytt pass</button></div>
-  <div class="grid workout-grid">${state.workouts.map(w=>`<article class="card workout-card"><h3>${escapeHtml(w.name)}</h3><div class="muted">${fmt(totalDuration(w))} · ${w.blocks.length} delar</div>${profileHTML(w)}<div class="card-actions"><button class="btn primary" onclick="startWorkout('${w.id}')">▶ Kör passet</button><button class="btn" onclick="editWorkout('${w.id}')">Redigera</button><button class="btn ghost" onclick="duplicateWorkout('${w.id}')">Duplicera</button><button class="btn ghost" onclick="deleteWorkout('${w.id}')">Radera</button></div></article>`).join('')}</div>`);
-}
-
-function newWorkout(){
-  state.editing={ id:crypto.randomUUID(), name:'Nytt spinningpass', blocks:[{duration:300,borg:10,name:'Uppvärmning',instruction:''}]};
-  state.view='edit'; render();
-}
-function editWorkout(id){ state.editing=structuredClone(state.workouts.find(w=>w.id===id)); state.view='edit'; render(); }
-function duplicateWorkout(id){ const src=state.workouts.find(w=>w.id===id); const copy=structuredClone(src); copy.id=crypto.randomUUID(); copy.name += ' – kopia'; state.workouts.unshift(copy); saveWorkouts(state.workouts); render(); }
-function deleteWorkout(id){ if(confirm('Radera passet?')){ state.workouts=state.workouts.filter(w=>w.id!==id); saveWorkouts(state.workouts); render(); } }
-
-function renderEditor(){
-  const w=state.editing;
-  shell(`<div class="hero-row"><div><h1>Redigera pass</h1><p class="muted">Bredd = tid · Höjd och färg = Borg.</p></div><div><button class="btn" onclick="previewEditing()">▶ Provkör</button> <button class="btn primary" onclick="saveEditing()">Spara pass</button></div></div>
-  <div class="editor-layout"><section class="card"><div class="form-row"><div><label>Passnamn</label><input value="${escapeAttr(w.name)}" oninput="state.editing.name=this.value"></div><div><label>Total tid</label><input value="${fmt(totalDuration(w))}" disabled></div></div>
-  <div class="section-title"><h2>Passdelar</h2><button class="btn small" onclick="addBlock()">+ Lägg till del</button></div>
-  <div class="block-row header"><div></div><div>Tid</div><div>Borg</div><div>Moment</div><div class="instruction-col">Instruktion</div><div></div></div>
-  <div id="blockRows">${w.blocks.map((b,i)=>blockRowHTML(b,i)).join('')}</div>
-  </section><aside class="profile-preview"><h3 style="margin-top:0">Passprofil</h3>${profileHTML(w,'profile-chart')}<div class="profile-meta"><span>${escapeHtml(w.name)}</span><span>${fmt(totalDuration(w))}</span></div><p class="muted" style="color:#999">Borg 6–20</p></aside></div>`);
-}
-
-function blockRowHTML(b,i){
-  return `<div class="block-row"><div class="drag">${i+1}</div><input value="${fmt(b.duration)}" onchange="updateDuration(${i},this.value)"><select onchange="updateBlock(${i},'borg',Number(this.value))">${Array.from({length:15},(_,k)=>k+6).map(v=>`<option ${v===b.borg?'selected':''}>${v}</option>`).join('')}</select><input value="${escapeAttr(b.name)}" oninput="updateBlock(${i},'name',this.value,false)"><input class="instruction-col" value="${escapeAttr(b.instruction||'')}" oninput="updateBlock(${i},'instruction',this.value,false)"><button class="icon-btn" onclick="removeBlock(${i})">×</button></div>`;
-}
-function updateDuration(i,v){
-  const m=v.match(/^(\d+):([0-5]\d)$/); if(!m){alert('Ange tid som mm:ss, t.ex. 03:30'); render(); return;}
-  state.editing.blocks[i].duration=Number(m[1])*60+Number(m[2]); render();
-}
-function updateBlock(i,key,val,rerender=true){ state.editing.blocks[i][key]=val; if(rerender) render(); }
-function addBlock(){ state.editing.blocks.push({duration:120,borg:13,name:'Ny del',instruction:''}); render(); }
-function removeBlock(i){ state.editing.blocks.splice(i,1); render(); }
-function saveEditing(){
-  const idx=state.workouts.findIndex(w=>w.id===state.editing.id);
-  if(idx>=0) state.workouts[idx]=structuredClone(state.editing); else state.workouts.unshift(structuredClone(state.editing));
-  saveWorkouts(state.workouts); state.view='list'; render();
-}
-function previewEditing(){ state.player=createPlayer(structuredClone(state.editing)); state.view='player'; render(); }
-
-function createPlayer(workout){ return {workout, elapsed:0, running:false, lastTick:null}; }
-function startWorkout(id){ state.player=createPlayer(structuredClone(state.workouts.find(w=>w.id===id))); state.view='player'; render(); }
-function currentBlockInfo(workout, elapsed){
-  let acc=0;
-  for(let i=0;i<workout.blocks.length;i++){
-    const b=workout.blocks[i];
-    if(elapsed < acc+b.duration || i===workout.blocks.length-1) return {index:i, block:b, start:acc, end:acc+b.duration, remaining:Math.max(0,acc+b.duration-elapsed)};
-    acc+=b.duration;
-  }
-}
-function renderPlayer(){
-  const p=state.player, w=p.workout, total=totalDuration(w), info=currentBlockInfo(w,p.elapsed), next=w.blocks[info.index+1];
-  app.innerHTML=`<div class="player"><div class="player-top"><div class="brand"><span>FRISKIS</span> BORG PLAYER</div><button class="btn ghost small" style="color:#fff;border-color:#444" onclick="nav('list')">Avsluta</button></div><main class="player-main">
-  <div class="player-header"><div class="title">${escapeHtml(w.name)}</div><div class="elapsed">${fmt(p.elapsed)} / ${fmt(total)}</div><div class="current"><div class="borg">BORG ${info.block.borg}</div><div class="label">${borgLabel(info.block.borg)}</div></div></div>
-  <div class="live-profile-wrap"><div class="live-profile">${w.blocks.map(b=>`<div class="bar" style="height:${heightForBorg(b.borg)}%;background:${borgColor(b.borg)};width:${(b.duration/total)*100}%"></div>`).join('')}<div class="done-overlay" style="width:${Math.min(100,(p.elapsed/total)*100)}%"></div><div class="time-marker" style="left:${Math.min(100,(p.elapsed/total)*100)}%"></div></div></div>
-  <div class="player-info"><div class="now-box"><div class="name">${escapeHtml(info.block.name)}</div><div class="instruction">${escapeHtml(info.block.instruction||'')}</div></div><div class="countdown">${fmt(info.remaining)}</div><div class="next-box">${next?`Nästa: <strong style="color:#fff">Borg ${next.borg}</strong> · ${escapeHtml(next.name)} · ${fmt(next.duration)}`:'Sista delen'}</div></div>
-  <div class="player-controls"><button class="btn" onclick="prevBlock()">⏮ Föregående</button><button class="btn primary" onclick="togglePlay()">${p.running?'⏸ Paus':'▶ Start'}</button><button class="btn" onclick="nextBlock()">Nästa ⏭</button><button class="btn dark" onclick="toggleFullscreen()">⛶ Helskärm</button></div>
-  <div class="zone-legend">${[8,10,12,14,16,18,20].map(v=>`<span class="legend-chip"><span class="legend-dot" style="background:${borgColor(v)}"></span>${v}</span>`).join('')}</div>
-  <div class="app-version">v${APP_VERSION}</div>
-  </main></div>`;
-}
-function togglePlay(){
-  const p=state.player;
-  p.running=!p.running;
-  renderPlayer();
-  if(p.running) startPlayerTimer(); else stopPlayerTimer();
-}
-function nextBlock(){ const p=state.player, info=currentBlockInfo(p.workout,p.elapsed); p.elapsed=info.end; renderPlayer(); if(p.running) startPlayerTimer(); }
-function prevBlock(){ const p=state.player, info=currentBlockInfo(p.workout,p.elapsed); p.elapsed=(p.elapsed-info.start>3)?info.start:Math.max(0, info.start-(p.workout.blocks[info.index-1]?.duration||0)); renderPlayer(); if(p.running) startPlayerTimer(); }
-function toggleFullscreen(){ if(!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
-function escapeHtml(s=''){ return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-function escapeAttr(s=''){ return escapeHtml(s); }
-
-render();
+const KEY='friskis-borg-passes-v13';
+const demo={id:'demo',name:'Spinning 45 – Intervall',parts:[
+['5:00',10,'Uppvärmning','Hitta rytmen'],['4:00',12,'Tempo','Öka successivt'],['3:00',14,'Backe – sittande','Kontrollerat'],
+['2:00',11,'Återhämtning','Lätt'],['4:00',15,'Backe – stående','Tryck'],['3:00',16,'Tempo','Jämnt hårt'],['2:00',12,'Återhämtning',''],
+['4:00',17,'Intervall','Hårt'],['3:00',14,'Tempo',''],['2:00',11,'Återhämtning',''],['4:00',16,'Backe – sittande',''],
+['3:00',14,'Tempo',''],['2:00',12,'Återhämtning',''],['4:00',10,'Nedvarvning','Lugnt']
+].map((x,i)=>({id:i+1,time:x[0],borg:x[1],moment:x[2],instruction:x[3]}))};
+let passes=JSON.parse(localStorage.getItem(KEY)||'null')||[demo], active=null, elapsed=0, running=false, timer=null;
+const app=document.querySelector('#app');
+const sec=t=>{let [m,s]=t.split(':').map(Number);return m*60+s}, fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
+function color(b){if(b<=9)return'#2868d8';if(b<=11)return'#38b978';if(b<=13)return'#b8d83c';if(b<=14)return'#ffd02d';if(b<=16)return'#ff8a27';return'#ef1738'}
+function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)} function save(){localStorage.setItem(KEY,JSON.stringify(passes))}
+function bars(p,cls='mini'){let T=total(p);return `<div class="${cls}">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/T*100}%;height:${Math.max(15,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}</div>`}
+function list(){stop();app.innerHTML=`<div class="toprow"><h1>Mina pass</h1><button class="primary" onclick="edit()">+ SKAPA NYTT PASS</button></div><div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div class="muted">${fmt(total(p))} · ${p.parts.length} delar</div>${bars(p)}<div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button><button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button></div></div>`).join('')}</div>`}
+function edit(i){stop();let p=i==null?{id:Date.now(),name:'Nytt pass',parts:[{id:1,time:'5:00',borg:10,moment:'Uppvärmning',instruction:''}]}:structuredClone(passes[i]);active={p,i};drawEdit()}
+function drawEdit(){let p=active.p;app.innerHTML=`<h1>Skapa / redigera pass</h1><div class="editor"><input class="name" id="pname" value="${p.name}">${bars(p,'profile')}<div id="rows">${p.parts.map((x,j)=>`<div class="row"><b>${j+1}</b><input value="${x.time}" onchange="chg(${j},'time',this.value)"><input class="borginput" type="number" min="6" max="20" value="${x.borg}" onchange="chg(${j},'borg',this.value)"><input value="${x.moment}" placeholder="Moment" onchange="chg(${j},'moment',this.value)"><input class="instruction" value="${x.instruction||''}" placeholder="Instruktion" onchange="chg(${j},'instruction',this.value)"><button onclick="removePart(${j})">×</button></div>`).join('')}</div><p><b>Total tid: ${fmt(total(p))}</b></p><div class="actions"><button onclick="addPart()">+ LÄGG TILL DEL</button><button class="primary" onclick="saveEdit()">SPARA PASS</button><button onclick="preview()">▶ PROVKÖR</button></div></div>`}
+function chg(i,k,v){active.p.parts[i][k]=k==='borg'?Math.max(6,Math.min(20,+v)):v;drawEdit()} function addPart(){active.p.parts.push({id:Date.now(),time:'2:00',borg:12,moment:'Ny del',instruction:''});drawEdit()} function removePart(i){if(active.p.parts.length>1)active.p.parts.splice(i,1);drawEdit()}
+function saveEdit(){active.p.name=document.querySelector('#pname').value||'Namnlöst pass'; if(active.i==null)passes.push(active.p);else passes[active.i]=active.p;save();list()}
+function preview(){active.p.name=document.querySelector('#pname').value||active.p.name; startPlayer(active.p)}
+function duplicate(i){let p=structuredClone(passes[i]);p.id=Date.now();p.name+=' – kopia';passes.push(p);save();list()} function del(i){if(confirm('Radera passet?')){passes.splice(i,1);save();list()}}
+function run(i){startPlayer(passes[i])} function startPlayer(p){stop();active={p};elapsed=0;drawLive()}
+function state(){let p=active.p,c=0;for(let i=0;i<p.parts.length;i++){let d=sec(p.parts[i].time);if(elapsed<c+d)return{i,part:p.parts[i],into:elapsed-c,left:d-(elapsed-c)};c+=d}return{i:p.parts.length-1,part:p.parts.at(-1),into:sec(p.parts.at(-1).time),left:0}}
+function drawLive(){let p=active.p,s=state(),T=total(p),n=p.parts[s.i+1],remain=T-elapsed;app.innerHTML=`<div class="live"><div class="liveTop"><div class="liveBrand"><h1>${p.name}</h1><div class="muted">TILLSAMMANS GÖR VI SKILLNAD</div></div><div class="current"><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div><div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div></div><div class="next"><div class="label">NÄSTA</div>${n?`<div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="moment">${n.moment}</div>`:'<div class="moment">MÅL 🎉</div>'}</div></div><div class="liveProfile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/T*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}<div class="marker" style="left:${Math.min(100,elapsed/T*100)}%"></div></div><div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div><div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="next()">NÄSTA ▶</button></div></div>`}
+function toggle(){running=!running;if(running&&!timer)timer=setInterval(()=>{if(elapsed<total(active.p)){elapsed++;drawLive()}else stop()},1000);drawLive()}
+function stop(){running=false;if(timer){clearInterval(timer);timer=null}}
+function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+sec(x.time),0);elapsed=Math.min(total(active.p),c);drawLive()}
+function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
+document.querySelector('#home').onclick=list; list();
