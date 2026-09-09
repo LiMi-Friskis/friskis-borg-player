@@ -17,6 +17,7 @@ const shortDemo={id:'demo-short',name:'Kort demo – 8 min',parts:[
 ].map((x,i)=>({id:'s'+(i+1),time:x[0],borg:x[1],moment:x[2],instruction:x[3]}))};
 
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
+let liveView=localStorage.getItem('friskis-live-view')||'clean';
 const app=document.querySelector('#app');
 const brandTitle=document.querySelector('#brandTitle');
 const brandSub=document.querySelector('#brandSub');
@@ -99,7 +100,7 @@ function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.pa
 function list(){
   stop(); setBrand(); setHomeButton(false);
   app.innerHTML=`<div class="toprow"><div><h1>Mina pass</h1><div class="muted">Välj ett pass eller skapa ett nytt <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="edit()">+ SKAPA NYTT PASS</button></div>
-  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div class="muted">${fmt(total(p))} · ${p.parts.length} delar</div>${bars(p)}
+  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div class="muted">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
   <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button><button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button></div></div>`).join('')}</div>`;
   setSync(online?'ok':'err',online?'Centralt sparat':'Lokalt läge');
 }
@@ -155,22 +156,20 @@ async function del(i){
 function run(i){startPlayer(passes[i])}
 function startPlayer(p){stop();setBrand(p.name,'');setHomeButton(true);active={p};elapsed=0;drawLive()}
 function state(){let p=active.p,c=0;for(let i=0;i<p.parts.length;i++){let d=sec(p.parts[i].time);if(elapsed<c+d)return{i,part:p.parts[i],into:elapsed-c,left:d-(elapsed-c)};c+=d}return{i:p.parts.length-1,part:p.parts.at(-1),into:sec(p.parts.at(-1).time),left:0}}
+function switchView(){liveView=liveView==='clean'?'dashboard':'clean';localStorage.setItem('friskis-live-view',liveView);drawLive()}
+function finishScreen(){stop();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
+function restartPass(){elapsed=0;running=false;drawLive()}
+function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="finishScreen()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
 function drawLive(){
-  let p=active.p,s=state(),T=total(p),n=p.parts[s.i+1],remain=T-elapsed;
-  app.innerHTML=`<div class="live"><div class="liveTop"><div class="liveBrand"></div>
-  <div class="current"><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div>
-  <div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div></div>
-  <div class="next"><div class="label">NÄSTA</div>${n?`<div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="moment">${n.moment}</div>`:'<div class="moment">MÅL 🎉</div>'}</div></div>
-  <div class="liveProfile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
-  <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div>
-  <div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div>
-  <div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="next()">NÄSTA ▶</button></div></div>`;
-}
+ let p=active.p,T=total(p);if(elapsed>=T){finishScreen();return}let s=state(),n=p.parts[s.i+1],remain=T-elapsed;
+ let sw=`<button class="view-switch" onclick="switchView()">BYT VY · ${liveView==='clean'?'DASHBOARD':'REN'}</button>`;
+ if(liveView==='dashboard'){app.innerHTML=`${sw}<div class="dashboard"><div class="dash-grid"><section class="dash-panel"><h3>PASSPROFIL</h3><div class="dash-profile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}<div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div><div class="dash-stats"><div><span>TOTAL TID</span><b>${fmt(T)}</b></div><div><span>AKTUELL DEL</span><b>${s.i+1} / ${p.parts.length}</b></div><div><span>TID KVAR</span><b>${fmt(remain)}</b></div></div></section><section class="dash-panel dash-now"><h3>NU KÖR VI</h3><div class="moment-now">${s.part.moment||''}</div><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div><div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="muted" style="margin-top:18px">${s.part.instruction||''}</div></section><section class="dash-panel dash-next"><h3>NÄSTA</h3>${n?`<div class="moment">${n.moment||''}</div><div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="muted">${n.instruction||''}</div>`:'<div class="moment">MÅL 🎉</div>'}</section></div>${controls()}</div>`;return}
+ app.innerHTML=`${sw}<div class="live"><div class="liveTop"><div class="liveBrand"></div><div class="current"><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div><div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div></div><div class="next"><div class="label">NÄSTA</div>${n?`<div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="moment">${n.moment}</div>`:'<div class="moment">MÅL 🎉</div>'}</div></div><div class="liveProfile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}<div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div><div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div>${controls()}</div>`}
 function toggle(){
   if(running){running=false;if(timer){clearInterval(timer);timer=null}drawLive();return}
   if(elapsed>=total(active.p))elapsed=0;
   running=true;
-  timer=setInterval(()=>{if(!running)return;if(elapsed<total(active.p)){elapsed++;drawLive()}else{stop();drawLive()}},1000);
+  timer=setInterval(()=>{if(!running)return;if(elapsed<total(active.p)){elapsed++;drawLive()}else{finishScreen()}},1000);
   drawLive();
 }
 function stop(){running=false;if(timer){clearInterval(timer);timer=null}}
