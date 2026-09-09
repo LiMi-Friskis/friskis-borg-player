@@ -1,15 +1,25 @@
-# Friskis Borg Player v1.4.2
+# Friskis Borg Player v1.5
 
-Demo-version för test.
+Första versionen med central lagring via Supabase.
 
-## Nytt i v1.4.2
-- **Mina pass är nu startsidan** direkt när appen öppnas.
-- Headern på startsidan visar `MINA PASS` i stället för `SPINNING`.
-- Den överflödiga knappen `Mina pass` göms när man redan är på startsidan.
-- I träningsvyn visas fortfarande aktuellt passnamn.
-- Pausfixen från v1.4.1 är kvar.
-- Ett kort **8-minuters demopass** läggs automatiskt till, även för användare som redan har sparade pass.
-- Sparade egna pass ligger kvar i localStorage.
+## Supabase
+Appen använder:
+- Project URL: `https://eaapffhepvbfcryayipx.supabase.co`
+- Publishable key i klientkoden
 
-## GitHub Pages
-Lägg filerna i repositoryts root och använd Pages: `main` / `(root)`.
+Tabellen måste heta `public.passes` och innehålla:
+- `id uuid primary key default gen_random_uuid()`
+- `name text not null`
+- `parts jsonb not null default '[]'::jsonb`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+RLS måste tillåta `anon` att select/insert/update/delete för demo-läget.
+
+## Funktion
+- Läser pass centralt från Supabase.
+- Sparar, duplicerar och raderar centralt.
+- Har localStorage som fallback om Supabase inte går att nå.
+- Visar status `Centralt sparat` eller `Lokalt läge`.
+
+GitHub Pages: `main` / `(root)`.
