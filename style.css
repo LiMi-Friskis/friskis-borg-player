@@ -143,3 +143,22 @@ footer{position:fixed;bottom:0;left:0;right:0;padding:18px 4vw;background:#080b0
   .count-ring{width:min(70vw,390px)}
   .dashboard .controls{flex-wrap:wrap}
 }
+
+/* v1.6.2 */
+.top-view-switch{
+  position:fixed;
+  top:34px;
+  right:180px;
+  z-index:50;
+  padding:12px 18px;
+  font-size:12px;
+  border-radius:10px;
+}
+@media(max-width:800px){
+  .top-view-switch{
+    top:24px;
+    right:120px;
+    padding:9px 12px;
+    font-size:11px;
+  }
+}

@@ -1,12 +1,10 @@
-# Friskis Borg Player v1.6.1
+# Friskis Borg Player v1.6.2
 
-Finjustering av dashboard-vyn:
+Ändringar:
+- Tar bort den dubbla headingen i dashboard-vyn.
+- `Byt vy` ligger nu på samma plats i båda träningsvyerna.
+- Det lokala 8-minuters demopasset behålls alltid, även när Supabase har centrala pass.
+- Centrala pass fortsätter komma från Supabase.
+- Grön/röd lagringsindikator, firande och båda träningsvyerna är kvar.
 
-- Behåller den runda nedräknaren i mitten.
-- Ringen räknar ned visuellt inom aktuellt block.
-- Ringens färg följer aktuell Borg-färg.
-- Passnamnet visas i dashboardens övre del.
-- Tog bort slogans/taglines i dashboard-vyn.
-- `Byt vy` finns kvar som tydlig knapp.
-- Grön/röd indikator visar om passet är centralt eller endast lokalt sparat.
-- Supabase-integrationen från v1.5/v1.6 är kvar.
+Supabase-konfigurationen från v1.5 är oförändrad.

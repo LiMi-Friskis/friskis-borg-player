@@ -53,21 +53,35 @@ function setSync(state,msg){
   el.innerHTML=`<span class="sync-dot"></span>${msg}`;
 }
 async function loadPasses(){
-  passes=loadCache();
-  if(!passes.length)passes=[demo,shortDemo];
+  const cached=loadCache();
+  passes=cached.length?cached:[shortDemo];
+  if(!passes.some(p=>p.id==='demo-short')) passes.push(shortDemo);
   list();
   setSync('work','Synkar...');
   try{
     const rows=await api('passes?select=id,name,parts,updated_at&order=updated_at.desc');
     online=true;
-    if(rows && rows.length){
-      passes=rows.map(r=>({id:r.id,name:r.name,parts:r.parts||[],remote:true}));
-    }else{
-      passes=[demo,shortDemo];
-    }
-    cache(); list(); setSync('ok','Centralt sparat');
+
+    const remotePasses=(rows||[]).map(r=>({
+      id:r.id,
+      name:r.name,
+      parts:r.parts||[],
+      remote:true
+    }));
+
+    // Keep the 8-minute demo as a local-only pass, but use Supabase
+    // as source of truth for all centrally stored passes.
+    passes=[...remotePasses, shortDemo];
+
+    cache();
+    list();
+    setSync('ok','Centralt sparat');
   }catch(e){
-    online=false; setSync('err','Lokalt läge');
+    online=false;
+    if(!passes.some(p=>p.id==='demo-short')) passes.push(shortDemo);
+    cache();
+    list();
+    setSync('err','Lokalt läge');
     console.error(e);
   }
 }
@@ -161,22 +175,19 @@ function finishScreen(){stop();setBrand(active.p.name,'');setHomeButton(true);ap
 function restartPass(){elapsed=0;running=false;drawLive()}
 function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="finishScreen()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
 
+
 function drawLive(){
   let p=active.p,T=total(p);
   if(elapsed>=T){finishScreen();return}
+
   let s=state(),n=p.parts[s.i+1],remain=T-elapsed;
   const partDuration=sec(s.part.time)||1;
   const progressPct=Math.max(0,Math.min(100,(s.into/partDuration)*100));
   const storageRemote=!!p.remote;
+  const switchButton=`<button class="top-view-switch" onclick="switchView()">▣ BYT VY</button>`;
 
   if(liveView==='dashboard'){
-    app.innerHTML=`<div class="dashboard">
-      <div class="dash-header">
-        <img class="dash-header-logo" src="friskis-logo.png" alt="Friskis & Svettis">
-        <div class="dash-header-title">${p.name}</div>
-        <div class="dash-header-clock">${new Date().toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'})}</div>
-      </div>
-
+    app.innerHTML=`${switchButton}<div class="dashboard">
       <div class="dash-grid">
         <section class="dash-panel">
           <h3>PASSPROFIL</h3>
@@ -195,6 +206,7 @@ function drawLive(){
           <h3>NU KÖR VI</h3>
           <div class="moment-now">${s.part.moment||''}</div>
           <div class="instruction-now">${s.part.instruction||''}</div>
+
           <div class="count-ring" style="--progress:${progressPct}%;--ring-color:${color(s.part.borg)}">
             <div class="count-ring-content">
               <div class="ring-label">BORG</div>
@@ -221,7 +233,6 @@ function drawLive(){
         <button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button>
         <button onclick="finishScreen()">■ AVSLUTA</button>
         <button onclick="next()">NÄSTA ▶</button>
-        <button class="view-switch" onclick="switchView()">▣ BYT VY</button>
       </div>
 
       <div class="dashboard-status">
@@ -233,15 +244,41 @@ function drawLive(){
     return;
   }
 
-  app.innerHTML=`<button class="view-switch" onclick="switchView()">▣ BYT VY</button>
-  <div class="live"><div class="liveTop"><div class="liveBrand"></div>
-  <div class="current"><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div>
-  <div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div></div>
-  <div class="next"><div class="label">NÄSTA</div>${n?`<div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="moment">${n.moment}</div>`:'<div class="moment">MÅL 🎉</div>'}</div></div>
-  <div class="liveProfile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
-  <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div>
-  <div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div>
-  <div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="finishScreen()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div></div>`;
+  app.innerHTML=`${switchButton}
+  <div class="live">
+    <div class="liveTop">
+      <div class="liveBrand"></div>
+      <div class="current">
+        <div class="label">BORG</div>
+        <div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div>
+        <div class="count">${fmt(s.left)}</div>
+        <div class="remain">KVAR</div>
+        <div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div>
+      </div>
+      <div class="next">
+        <div class="label">NÄSTA</div>
+        ${n?`
+          <div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div>
+          <div class="time">${n.time}</div>
+          <div class="moment">${n.moment}</div>
+        `:'<div class="moment">MÅL 🎉</div>'}
+      </div>
+    </div>
+
+    <div class="liveProfile">
+      ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
+      <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div>
+    </div>
+
+    <div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div>
+
+    <div class="controls">
+      <button onclick="prev()">◀ FÖREGÅENDE</button>
+      <button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button>
+      <button onclick="finishScreen()">■ AVSLUTA</button>
+      <button onclick="next()">NÄSTA ▶</button>
+    </div>
+  </div>`;
 }
 function toggle(){
   if(running){running=false;if(timer){clearInterval(timer);timer=null}drawLive();return}
