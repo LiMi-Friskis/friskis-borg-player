@@ -160,11 +160,89 @@ function switchView(){liveView=liveView==='clean'?'dashboard':'clean';localStora
 function finishScreen(){stop();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
 function restartPass(){elapsed=0;running=false;drawLive()}
 function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="finishScreen()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
+
 function drawLive(){
- let p=active.p,T=total(p);if(elapsed>=T){finishScreen();return}let s=state(),n=p.parts[s.i+1],remain=T-elapsed;
- let sw=`<button class="view-switch" onclick="switchView()">BYT VY · ${liveView==='clean'?'DASHBOARD':'REN'}</button>`;
- if(liveView==='dashboard'){app.innerHTML=`${sw}<div class="dashboard"><div class="dash-grid"><section class="dash-panel"><h3>PASSPROFIL</h3><div class="dash-profile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}<div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div><div class="dash-stats"><div><span>TOTAL TID</span><b>${fmt(T)}</b></div><div><span>AKTUELL DEL</span><b>${s.i+1} / ${p.parts.length}</b></div><div><span>TID KVAR</span><b>${fmt(remain)}</b></div></div></section><section class="dash-panel dash-now"><h3>NU KÖR VI</h3><div class="moment-now">${s.part.moment||''}</div><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div><div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="muted" style="margin-top:18px">${s.part.instruction||''}</div></section><section class="dash-panel dash-next"><h3>NÄSTA</h3>${n?`<div class="moment">${n.moment||''}</div><div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="muted">${n.instruction||''}</div>`:'<div class="moment">MÅL 🎉</div>'}</section></div>${controls()}</div>`;return}
- app.innerHTML=`${sw}<div class="live"><div class="liveTop"><div class="liveBrand"></div><div class="current"><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div><div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div></div><div class="next"><div class="label">NÄSTA</div>${n?`<div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="moment">${n.moment}</div>`:'<div class="moment">MÅL 🎉</div>'}</div></div><div class="liveProfile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}<div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div><div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div>${controls()}</div>`}
+  let p=active.p,T=total(p);
+  if(elapsed>=T){finishScreen();return}
+  let s=state(),n=p.parts[s.i+1],remain=T-elapsed;
+  const partDuration=sec(s.part.time)||1;
+  const progressPct=Math.max(0,Math.min(100,(s.into/partDuration)*100));
+  const storageRemote=!!p.remote;
+
+  if(liveView==='dashboard'){
+    app.innerHTML=`<div class="dashboard">
+      <div class="dash-header">
+        <img class="dash-header-logo" src="friskis-logo.png" alt="Friskis & Svettis">
+        <div class="dash-header-title">${p.name}</div>
+        <div class="dash-header-clock">${new Date().toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+
+      <div class="dash-grid">
+        <section class="dash-panel">
+          <h3>PASSPROFIL</h3>
+          <div class="dash-profile">
+            ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
+            <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div>
+          </div>
+          <div class="dash-stats">
+            <div><span>TOTAL TID</span><b>${fmt(T)}</b></div>
+            <div><span>AKTUELL DEL</span><b>${s.i+1} / ${p.parts.length}</b></div>
+            <div><span>TID KVAR</span><b>${fmt(remain)}</b></div>
+          </div>
+        </section>
+
+        <section class="dash-panel dash-now">
+          <h3>NU KÖR VI</h3>
+          <div class="moment-now">${s.part.moment||''}</div>
+          <div class="instruction-now">${s.part.instruction||''}</div>
+          <div class="count-ring" style="--progress:${progressPct}%;--ring-color:${color(s.part.borg)}">
+            <div class="count-ring-content">
+              <div class="ring-label">BORG</div>
+              <div class="ring-borg" style="color:${color(s.part.borg)}">${s.part.borg}</div>
+              <div class="ring-time">${fmt(s.left)}</div>
+              <div class="ring-kvar">KVAR</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dash-panel dash-next">
+          <h3>NÄSTA</h3>
+          ${n?`
+            <div class="moment">${n.moment||''}</div>
+            <div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div>
+            <div class="time">${n.time}</div>
+            <div class="muted">${n.instruction||''}</div>
+          `:'<div class="moment">MÅL 🎉</div>'}
+        </section>
+      </div>
+
+      <div class="controls">
+        <button onclick="prev()">◀ FÖREGÅENDE</button>
+        <button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button>
+        <button onclick="finishScreen()">■ AVSLUTA</button>
+        <button onclick="next()">NÄSTA ▶</button>
+        <button class="view-switch" onclick="switchView()">▣ BYT VY</button>
+      </div>
+
+      <div class="dashboard-status">
+        <span class="storage"><span class="dot ${storageRemote?'remote':''}"></span>${storageRemote?'Centralt sparat':'Endast lokalt'}</span>
+        <span>·</span>
+        <span>${p.name}</span>
+      </div>
+    </div>`;
+    return;
+  }
+
+  app.innerHTML=`<button class="view-switch" onclick="switchView()">▣ BYT VY</button>
+  <div class="live"><div class="liveTop"><div class="liveBrand"></div>
+  <div class="current"><div class="label">BORG</div><div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div>
+  <div class="count">${fmt(s.left)}</div><div class="remain">KVAR</div><div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div></div>
+  <div class="next"><div class="label">NÄSTA</div>${n?`<div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div><div class="time">${n.time}</div><div class="moment">${n.moment}</div>`:'<div class="moment">MÅL 🎉</div>'}</div></div>
+  <div class="liveProfile">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
+  <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div></div>
+  <div class="muted">${s.part.moment}${s.part.instruction?' · '+s.part.instruction:''}</div>
+  <div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="finishScreen()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div></div>`;
+}
 function toggle(){
   if(running){running=false;if(timer){clearInterval(timer);timer=null}drawLive();return}
   if(elapsed>=total(active.p))elapsed=0;

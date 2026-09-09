@@ -18,3 +18,128 @@ footer{position:fixed;bottom:0;left:0;right:0;padding:18px 4vw;background:#080b0
 .finish{min-height:68vh;display:flex;align-items:center;justify-content:center;text-align:center}.finish-logo{width:150px;height:150px;object-fit:contain;animation:pulse 1.6s ease-in-out infinite}.finish h1{font-size:72px;margin:20px 0 5px}.finish p{font-size:25px;color:#c4c9cc}@keyframes pulse{50%{transform:scale(1.06);filter:drop-shadow(0 0 22px #ef173888)}}
 .dash-grid{display:grid;grid-template-columns:1.15fr 1.05fr .75fr;gap:28px}.dash-panel{background:linear-gradient(145deg,#11181c,#0c1114);border:1px solid #354047;border-radius:20px;padding:26px}.dash-panel h3{letter-spacing:4px;color:#b9c0c4;font-size:16px;margin:0 0 20px}.dash-profile{height:285px;display:flex;align-items:end;gap:3px;border-bottom:1px solid #6d7478;position:relative;padding-top:35px}.dash-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px;text-align:center}.dash-stats span{display:block;color:#aeb6bb;letter-spacing:2px;font-size:12px}.dash-stats b{display:block;font-size:29px;margin-top:8px}.dash-now{text-align:center;display:flex;flex-direction:column;justify-content:center;min-height:500px}.dash-now .moment-now{font-size:29px;font-weight:800;margin-bottom:20px}.dash-now .borgBig{font-size:90px}.dash-now .count{font-size:100px}.dash-next{display:flex;flex-direction:column;justify-content:center}.dash-next .borg{font-size:42px;font-weight:900}.dash-next .time{font-size:42px;font-weight:800;margin:10px 0}.dash-next .moment{font-size:25px}
 @media(max-width:1000px){.dash-grid{grid-template-columns:1fr}.dash-now{min-height:auto}.view-switch{top:100px}.finish h1{font-size:48px}}
+
+/* v1.6.1 dashboard refinement */
+.dash-header{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:24px;
+  margin-bottom:22px;
+}
+.dash-header-logo{
+  width:96px;
+  height:96px;
+  object-fit:contain;
+}
+.dash-header-title{
+  font-size:32px;
+  font-weight:800;
+  letter-spacing:.2px;
+}
+.dash-header-clock{
+  color:#b8c0c5;
+  font-size:18px;
+}
+.dash-grid{
+  grid-template-columns:1.08fr 1fr .72fr;
+  align-items:stretch;
+}
+.dash-now{
+  min-height:500px;
+  padding:20px 26px 26px;
+}
+.dash-now .moment-now{
+  font-size:31px;
+  margin:0 0 8px;
+}
+.dash-now .instruction-now{
+  color:#b9c0c4;
+  font-size:18px;
+  margin-bottom:20px;
+}
+.count-ring{
+  --progress: 50%;
+  width:min(31vw,430px);
+  aspect-ratio:1;
+  margin:0 auto;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  background:
+    conic-gradient(var(--ring-color,#ef1738) var(--progress), #252c31 0);
+}
+.count-ring::before{
+  content:"";
+  position:absolute;
+  inset:18px;
+  border-radius:50%;
+  background:#0d1316;
+  box-shadow:inset 0 0 0 1px #1c252a;
+}
+.count-ring-content{
+  position:relative;
+  z-index:2;
+  text-align:center;
+}
+.count-ring .ring-label{
+  letter-spacing:5px;
+  color:#b8bec2;
+  font-weight:700;
+  font-size:16px;
+}
+.count-ring .ring-borg{
+  font-size:76px;
+  font-weight:900;
+  line-height:.95;
+}
+.count-ring .ring-time{
+  font-size:88px;
+  font-weight:900;
+  line-height:1.1;
+  margin-top:10px;
+}
+.count-ring .ring-kvar{
+  letter-spacing:5px;
+  color:#bfc4c7;
+  font-weight:700;
+  font-size:20px;
+}
+.dashboard .view-switch{
+  position:static;
+  min-width:120px;
+}
+.dashboard .controls{
+  align-items:center;
+}
+.dashboard .controls button{
+  min-width:145px;
+}
+.dashboard-status{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-top:18px;
+  color:#aeb6bb;
+  font-size:14px;
+}
+.dashboard-status .storage{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.dashboard-status .dot{
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:#ef1738;
+}
+.dashboard-status .dot.remote{background:#38b978}
+@media(max-width:1000px){
+  .dash-header{grid-template-columns:auto 1fr}
+  .dash-header-clock{display:none}
+  .count-ring{width:min(70vw,390px)}
+  .dashboard .controls{flex-wrap:wrap}
+}
