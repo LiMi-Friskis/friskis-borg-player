@@ -84,3 +84,5 @@ input, select { width:100%; border:1px solid #cfcfcf; border-radius:10px; paddin
   .countdown { text-align:left; }
   .live-profile { height:40vh; }
 }
+
+.app-version{position:fixed;right:14px;bottom:10px;font-size:11px;letter-spacing:.08em;opacity:.35;color:currentColor;pointer-events:none}
