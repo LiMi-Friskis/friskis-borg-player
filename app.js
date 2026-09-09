@@ -116,7 +116,7 @@ function saveEditing(){
 }
 function previewEditing(){ state.player=createPlayer(structuredClone(state.editing)); state.view='player'; render(); }
 
-function createPlayer(workout){ return {workout, elapsed:0, running:false, startedAt:null}; }
+function createPlayer(workout){ return {workout, elapsed:0, running:false, lastTick:null}; }
 function startWorkout(id){ state.player=createPlayer(structuredClone(state.workouts.find(w=>w.id===id))); state.view='player'; render(); }
 function currentBlockInfo(workout, elapsed){
   let acc=0;
@@ -126,27 +126,72 @@ function currentBlockInfo(workout, elapsed){
     acc+=b.duration;
   }
 }
+function stopPlayerTimer(){
+  if(timer){ clearInterval(timer); timer=null; }
+}
+function startPlayerTimer(){
+  stopPlayerTimer();
+  const p=state.player;
+  if(!p || !p.running) return;
+  p.lastTick=performance.now();
+  timer=setInterval(()=>{
+    if(!state.player || !state.player.running || state.view!=='player'){
+      stopPlayerTimer();
+      return;
+    }
+    const now=performance.now();
+    const delta=(now-state.player.lastTick)/1000;
+    state.player.lastTick=now;
+    state.player.elapsed=Math.min(totalDuration(state.player.workout), state.player.elapsed+delta);
+    if(state.player.elapsed>=totalDuration(state.player.workout)){
+      state.player.running=false;
+      stopPlayerTimer();
+    }
+    renderPlayer();
+  },250);
+}
 function renderPlayer(){
   const p=state.player, w=p.workout, total=totalDuration(w), info=currentBlockInfo(w,p.elapsed), next=w.blocks[info.index+1];
-  app.innerHTML=`<div class="player"><div class="player-top"><div class="brand"><span>FRISKIS</span> BORG PLAYER</div><button class="btn ghost small" style="color:#fff;border-color:#444" onclick="nav('list')">Avsluta</button></div><main class="player-main">
+  app.innerHTML=`<div class="player"><div class="player-top"><div class="brand"><span>FRISKIS</span> BORG PLAYER</div><button class="btn ghost small" style="color:#fff;border-color:#444" onclick="exitPlayer()">Avsluta</button></div><main class="player-main">
   <div class="player-header"><div class="title">${escapeHtml(w.name)}</div><div class="elapsed">${fmt(p.elapsed)} / ${fmt(total)}</div><div class="current"><div class="borg">BORG ${info.block.borg}</div><div class="label">${borgLabel(info.block.borg)}</div></div></div>
   <div class="live-profile-wrap"><div class="live-profile">${w.blocks.map(b=>`<div class="bar" style="height:${heightForBorg(b.borg)}%;background:${borgColor(b.borg)};width:${(b.duration/total)*100}%"></div>`).join('')}<div class="done-overlay" style="width:${Math.min(100,(p.elapsed/total)*100)}%"></div><div class="time-marker" style="left:${Math.min(100,(p.elapsed/total)*100)}%"></div></div></div>
   <div class="player-info"><div class="now-box"><div class="name">${escapeHtml(info.block.name)}</div><div class="instruction">${escapeHtml(info.block.instruction||'')}</div></div><div class="countdown">${fmt(info.remaining)}</div><div class="next-box">${next?`Nästa: <strong style="color:#fff">Borg ${next.borg}</strong> · ${escapeHtml(next.name)} · ${fmt(next.duration)}`:'Sista delen'}</div></div>
   <div class="player-controls"><button class="btn" onclick="prevBlock()">⏮ Föregående</button><button class="btn primary" onclick="togglePlay()">${p.running?'⏸ Paus':'▶ Start'}</button><button class="btn" onclick="nextBlock()">Nästa ⏭</button><button class="btn dark" onclick="toggleFullscreen()">⛶ Helskärm</button></div>
   <div class="zone-legend">${[8,10,12,14,16,18,20].map(v=>`<span class="legend-chip"><span class="legend-dot" style="background:${borgColor(v)}"></span>${v}</span>`).join('')}</div>
   </main></div>`;
+}
+function togglePlay(){
+  const p=state.player;
+  if(!p) return;
   if(p.running){
-    const baseElapsed=p.elapsed; p.startedAt=performance.now();
-    timer=setInterval(()=>{
-      p.elapsed=Math.min(total, baseElapsed+(performance.now()-p.startedAt)/1000);
-      if(p.elapsed>=total){ p.running=false; clearInterval(timer); timer=null; }
-      renderPlayer();
-    },500);
+    p.running=false;
+    stopPlayerTimer();
+    renderPlayer();
+  } else {
+    if(p.elapsed>=totalDuration(p.workout)) p.elapsed=0;
+    p.running=true;
+    renderPlayer();
+    startPlayerTimer();
   }
 }
-function togglePlay(){ const p=state.player; p.running=!p.running; renderPlayer(); }
-function nextBlock(){ const p=state.player, info=currentBlockInfo(p.workout,p.elapsed); p.elapsed=info.end; renderPlayer(); }
-function prevBlock(){ const p=state.player, info=currentBlockInfo(p.workout,p.elapsed); p.elapsed=(p.elapsed-info.start>3)?info.start:Math.max(0, info.start-(p.workout.blocks[info.index-1]?.duration||0)); renderPlayer(); }
+function nextBlock(){
+  const p=state.player, info=currentBlockInfo(p.workout,p.elapsed);
+  p.elapsed=Math.min(totalDuration(p.workout),info.end);
+  if(p.running) p.lastTick=performance.now();
+  renderPlayer();
+}
+function prevBlock(){
+  const p=state.player, info=currentBlockInfo(p.workout,p.elapsed);
+  p.elapsed=(p.elapsed-info.start>3)?info.start:Math.max(0, info.start-(p.workout.blocks[info.index-1]?.duration||0));
+  if(p.running) p.lastTick=performance.now();
+  renderPlayer();
+}
+function exitPlayer(){
+  stopPlayerTimer();
+  if(state.player) state.player.running=false;
+  state.view='list';
+  render();
+}
 function toggleFullscreen(){ if(!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
 function escapeHtml(s=''){ return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function escapeAttr(s=''){ return escapeHtml(s); }
