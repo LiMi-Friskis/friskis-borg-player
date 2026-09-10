@@ -37,8 +37,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.2.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.2.1')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.2.3'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.2.3')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -177,7 +177,7 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.2.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.2.3</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -598,21 +598,15 @@ async function del(i){
 }
 
 function run(i){startPlayer(passes[i])}
-async function unlockAudio(){
+function unlockAudio(){
  try{
   const C=window.AudioContext||window.webkitAudioContext;
-  if(!C)return;
   const ctx=beep.ctx||(beep.ctx=new C());
-  if(ctx.state==='suspended')await ctx.resume();
-
-  // Safari/iPhone/iPad: spela en mycket kort tyst ton i själva
-  // användargesten så att kontexten verkligen låses upp.
+  if(ctx.state==='suspended')ctx.resume();
   const o=ctx.createOscillator(),g=ctx.createGain();
   g.gain.setValueAtTime(0.00001,ctx.currentTime);
-  o.connect(g);g.connect(ctx.destination);
-  o.start(ctx.currentTime);
-  o.stop(ctx.currentTime+0.025);
- }catch(e){console.warn('Audio unlock failed',e)}
+  o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+0.02);
+ }catch(e){}
 }
 function startPlayer(p){
  // Lås upp Web Audio direkt i användarens klickhändelse (viktigt i Safari/iPad).
@@ -621,26 +615,7 @@ function startPlayer(p){
  beginPass(settings.prestart||0);
 }
 function beginPass(n){if(n)runPrestart(n);else{saveSession();drawLive()}}
-async function beep(freq=880,duration=.11){
- try{
-  const C=window.AudioContext||window.webkitAudioContext;
-  if(!C)return;
-  const ctx=beep.ctx||(beep.ctx=new C());
-  if(ctx.state==='suspended')await ctx.resume();
-  const now=ctx.currentTime;
-  const o=ctx.createOscillator(),g=ctx.createGain();
-  o.frequency.setValueAtTime(freq,now);
-  g.gain.setValueAtTime(.11,now);
-  g.gain.exponentialRampToValueAtTime(.001,now+duration);
-  o.connect(g);g.connect(ctx.destination);
-  o.start(now);o.stop(now+duration);
- }catch(e){console.warn('Audio beep failed',e)}
-}
-document.addEventListener('visibilitychange',()=>{
- if(document.visibilityState==='visible' && beep.ctx && beep.ctx.state==='suspended'){
-  beep.ctx.resume().catch(()=>{});
- }
-});
+function beep(freq=880,duration=.11){try{const C=window.AudioContext||window.webkitAudioContext;const ctx=beep.ctx||(beep.ctx=new C());if(ctx.state==='suspended')ctx.resume();const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=freq;g.gain.setValueAtTime(.09,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+duration);o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+duration)}catch(e){}}
 
 function runPrestart(n){
  let left=n;

@@ -1,14 +1,14 @@
-# Friskis Training Player — Prototype 2.2.1
+# Friskis Training Player — Prototype 2.2.3
 
-Liten stabilitetsfix för ljudet. Inga andra funktioner är ändrade från Prototype 2.2.0.
+Samma ljudfix som Prototype 2.2.2, plus visuell app-identitet:
+- TP-favicon för webbläsarfliken
+- TP Apple Touch Icon för iPhone/iPad
+- Web App Manifest och ikoner i 192/512 px
+- Friskis-röd #E31836 med vit TP
 
-Ändrat:
-- Web Audio låses upp mer robust vid start av pass.
-- Safari/iPhone/iPad väntar nu på att AudioContext verkligen har återupptagits.
-- Ljudkontext återupptas när appen kommer tillbaka från bakgrunden.
-- Gäller både 3–2–1-ljud och blockbytesljud.
+Ingen SQL.
+Ingen Edge Function.
 
-Ingen ny SQL krävs.
-Ingen Edge Function behöver ändras.
+OBS: från denna version ska ikonfilerna och `site.webmanifest` också laddas upp till GitHub Pages.
 
 © 2026 LiMi Equus AB. Alla rättigheter förbehållna.
