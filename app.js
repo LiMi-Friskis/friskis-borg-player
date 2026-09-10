@@ -36,8 +36,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.1.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.1.0')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.1.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.1.1')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -74,7 +74,7 @@ function signOut(){auth=null;currentProfile=null;profiles=[];localStorage.remove
 async function loadProfiles(){
   if(!auth){currentProfile=null;profiles=[];return []}
   try{
-    profiles=await api('profiles?select=user_id,display_name,role,is_active,created_at&order=display_name.asc')||[];
+    profiles=await api('profiles?select=user_id,display_name,role,is_active,onboarding_complete,created_at&order=display_name.asc')||[];
     currentProfile=profiles.find(p=>p.user_id===auth.user?.id)||null;
     return profiles;
   }catch(e){
@@ -86,7 +86,53 @@ function isSuper(){return currentProfile?.role==='super_user'}
 function isAdmin(){return ['admin','super_user'].includes(currentProfile?.role)}
 function canEditPass(p){return !!auth && (p?.owner_id===auth.user?.id || isSuper())}
 function ownerName(p){const pr=profiles.find(x=>x.user_id===p?.owner_id);return pr?.display_name||((p?.owner_id===auth?.user?.id)?(currentProfile?.display_name||auth?.user?.email):'Okänd ägare')}
-function login(){stop();setAppBrand();setHomeButton(true);app.innerHTML=`<div class="loginbox"><h1>Logga in</h1><p class="muted">Publika pass kan köras utan konto. Inloggning krävs för att skapa och redigera.</p><input id="loginEmail" type="email" placeholder="E-post"><input id="loginPassword" type="password" placeholder="Lösenord" onkeydown="if(event.key==='Enter')signIn()"><div class="actions"><button class="primary" onclick="signIn()">LOGGA IN</button><button onclick="list()">AVBRYT</button></div></div>`}
+function login(){stop();setAppBrand();setHomeButton(true);app.innerHTML=`<div class="loginbox"><h1>Logga in</h1><p class="muted">Publika pass kan köras utan konto. Inloggning krävs för att skapa och redigera.</p><input id="loginEmail" type="email" placeholder="E-post"><input id="loginPassword" type="password" placeholder="Lösenord" onkeydown="if(event.key==='Enter')signIn()"><div class="login-links"><button class="linkbtn" onclick="requestPasswordReset()">Glömt lösenord?</button></div><div class="actions"><button class="primary" onclick="signIn()">LOGGA IN</button><button onclick="list()">AVBRYT</button></div></div>`}
+
+async function requestPasswordReset(){
+  const email=(document.querySelector('#loginEmail')?.value||prompt('Ange din e-postadress:')||'').trim();
+  if(!email)return;
+  try{
+    await authFetch('recover',{method:'POST',body:JSON.stringify({email,redirect_to:location.origin+location.pathname})});
+    alert('Om adressen finns registrerad skickas en länk för att välja ett nytt lösenord.');
+  }catch(e){alert('Kunde inte skicka återställningslänken: '+e.message)}
+}
+
+function parseAuthCallback(){
+  const raw=(location.hash||'').replace(/^#/,'');
+  if(!raw)return null;
+  const q=new URLSearchParams(raw);
+  const type=q.get('type');
+  const access_token=q.get('access_token');
+  const refresh_token=q.get('refresh_token');
+  if(!access_token || !['invite','recovery','signup'].includes(type))return null;
+  return {type,access_token,refresh_token};
+}
+
+function showSetPassword(callback){
+  stop();setAppBrand();setHomeButton(false);
+  const heading=callback.type==='recovery'?'Välj ett nytt lösenord':'Välkommen – välj ditt lösenord';
+  app.innerHTML=`<div class="loginbox"><h1>${heading}</h1><p class="muted">Lösenordet ska vara minst 8 tecken.</p><input id="newPassword1" type="password" placeholder="Nytt lösenord"><input id="newPassword2" type="password" placeholder="Upprepa lösenord" onkeydown="if(event.key==='Enter')completePasswordSetup()"><div class="actions"><button class="primary" onclick="completePasswordSetup()">SPARA LÖSENORD</button></div></div>`;
+  window.pendingAuthCallback=callback;
+}
+
+async function completePasswordSetup(){
+  const cb=window.pendingAuthCallback;
+  const p1=document.querySelector('#newPassword1')?.value||'',p2=document.querySelector('#newPassword2')?.value||'';
+  if(p1.length<8){alert('Välj ett lösenord med minst 8 tecken.');return}
+  if(p1!==p2){alert('Lösenorden är inte lika.');return}
+  try{
+    const res=await fetch(SUPABASE_URL+'/auth/v1/user',{method:'PUT',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+cb.access_token,'Content-Type':'application/json'},body:JSON.stringify({password:p1})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.msg||data.message||'Kunde inte spara lösenordet');
+    auth={access_token:cb.access_token,refresh_token:cb.refresh_token,user:data};
+    localStorage.setItem(AUTH_KEY,JSON.stringify(auth));
+    history.replaceState(null,'',location.pathname+location.search);
+    try{await api('profiles?user_id=eq.'+encodeURIComponent(data.id),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({onboarding_complete:true})})}catch(e){}
+    await loadProfiles();await loadRegistries();await loadPasses();
+    alert('Lösenordet är sparat. Du är nu inloggad.');
+  }catch(e){alert(e.message)}
+}
+
 async function loadRegistries(){
   registryErrors=[];
   const specs=[
@@ -117,18 +163,38 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.1.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.1.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 async function showUsers(){
   if(!auth){login();return}
   await loadProfiles();
   if(!isAdmin()){alert('Du saknar behörighet till användaradministrationen.');list();return}
   stop();setAppBrand();setHomeButton(true);
   const editable=isSuper();
-  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Användare</h1><div class="muted">${editable?'Hantera roller och status.':'Översikt över registrerade användare.'}</div></div></div>
+  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Användare</h1><div class="muted">${editable?'Hantera användare, roller och status.':'Översikt över registrerade användare.'}</div></div><button class="primary" onclick="showInviteUser()">+ BJUD IN ANVÄNDARE</button></div>
   <div class="adminbox"><table class="admin-table"><thead><tr><th>Namn</th><th>Roll</th><th>Status</th><th></th></tr></thead><tbody>
-  ${profiles.map(p=>`<tr><td><b>${escAttr(p.display_name||'Namnlös')}</b>${p.user_id===auth.user?.id?' <span class="badge">Du</span>':''}</td><td>${editable&&p.user_id!==auth.user?.id?`<select onchange="updateUserRole('${p.user_id}',this.value)"><option value="instructor" ${p.role==='instructor'?'selected':''}>Instruktör</option><option value="admin" ${p.role==='admin'?'selected':''}>Admin</option><option value="super_user" ${p.role==='super_user'?'selected':''}>Super User</option></select>`:`<span class="badge">${roleLabel(p.role)}</span>`}</td><td><span class="status ${p.is_active?'active':'inactive'}">${p.is_active?'Aktiv':'Inaktiv'}</span></td><td>${editable&&p.user_id!==auth.user?.id?`<button class="smallbtn" onclick="toggleUserActive('${p.user_id}',${!p.is_active})">${p.is_active?'Inaktivera':'Aktivera'}</button>`:''}</td></tr>`).join('')}
+  ${profiles.map(p=>`<tr><td><b>${escAttr(p.display_name||'Namnlös')}</b>${p.user_id===auth.user?.id?' <span class="badge">Du</span>':''}</td><td>${editable&&p.user_id!==auth.user?.id?`<select onchange="updateUserRole('${p.user_id}',this.value)"><option value="instructor" ${p.role==='instructor'?'selected':''}>Instruktör</option><option value="admin" ${p.role==='admin'?'selected':''}>Admin</option><option value="super_user" ${p.role==='super_user'?'selected':''}>Super User</option></select>`:`<span class="badge">${roleLabel(p.role)}</span>`}</td><td><span class="status ${!p.is_active?'inactive':p.onboarding_complete?'active':'invited'}">${!p.is_active?'Inaktiv':p.onboarding_complete?'Aktiv':'Inbjuden'}</span></td><td>${editable&&p.user_id!==auth.user?.id?`<button class="smallbtn" onclick="toggleUserActive('${p.user_id}',${!p.is_active})">${p.is_active?'Inaktivera':'Aktivera'}</button>`:''}</td></tr>`).join('')}
   </tbody></table></div>`;
 }
+
+function showInviteUser(){
+  if(!auth||!isAdmin())return;
+  app.innerHTML=`${userTools()}<div class="loginbox"><h1>Bjud in användare</h1><p class="muted">Användaren får ett mejl och väljer själv sitt lösenord.</p><input id="inviteName" type="text" placeholder="Namn"><input id="inviteEmail" type="email" placeholder="E-post"><div class="field" style="margin-top:10px"><label>Roll</label><select id="inviteRole"><option value="instructor">Instruktör</option><option value="admin">Admin</option>${isSuper()?'<option value="super_user">Super User</option>':''}</select></div><div class="actions"><button class="primary" onclick="inviteUser()">SKICKA INBJUDAN</button><button onclick="showUsers()">AVBRYT</button></div></div>`;
+}
+
+async function inviteUser(){
+  const email=document.querySelector('#inviteEmail')?.value.trim();
+  const display_name=document.querySelector('#inviteName')?.value.trim();
+  const role=document.querySelector('#inviteRole')?.value||'instructor';
+  if(!email){alert('Ange e-postadress.');return}
+  try{
+    const res=await fetch(SUPABASE_URL+'/functions/v1/invite-user',{method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+auth.access_token,'Content-Type':'application/json'},body:JSON.stringify({email,display_name,role,redirect_to:location.origin+location.pathname})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||data.message||'Kunde inte skicka inbjudan');
+    alert('Inbjudan skickad till '+email+'.');
+    await loadProfiles();showUsers();
+  }catch(e){alert('Kunde inte bjuda in användaren: '+e.message)}
+}
+
 async function updateUserRole(userId,role){
   if(!isSuper())return;
   try{await api('profiles?user_id=eq.'+encodeURIComponent(userId),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({role})});await loadProfiles();showUsers()}catch(e){alert('Kunde inte ändra roll: '+e.message)}
@@ -463,4 +529,4 @@ function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+se
 function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
 
 homeBtn.onclick=goHome;
-(async()=>{if(auth)await loadProfiles();await loadRegistries();await loadPasses();checkResume()})();
+(async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth)await loadProfiles();await loadRegistries();await loadPasses();checkResume()})();
