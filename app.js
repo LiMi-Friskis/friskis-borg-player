@@ -36,8 +36,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.1.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.1.1')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.1.2'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.1.2')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -60,12 +60,25 @@ async function authFetch(path,opts={}){
   const res=await fetch(SUPABASE_URL+'/auth/v1/'+path,{...opts,headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json',...(opts.headers||{})}});
   const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.msg||data.error_description||data.message||'Inloggning misslyckades'); return data;
 }
+async function markOwnProfileActive(){
+  if(!auth?.access_token)return;
+  try{
+    await api('rpc/mark_own_profile_active',{method:'POST',headers:{'Prefer':'return=minimal'},body:'{}'});
+  }catch(e){console.warn('Kunde inte markera profilen som aktiv',e)}
+}
 async function signIn(){
   const email=document.querySelector('#loginEmail')?.value.trim(), password=document.querySelector('#loginPassword')?.value||'';
   try{
     auth=await authFetch('token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
     localStorage.setItem(AUTH_KEY,JSON.stringify(auth));
+    await markOwnProfileActive();
     await loadProfiles();
+    if(currentProfile && !currentProfile.is_active){
+      auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);
+      alert('Ditt konto är inaktiverat. Kontakta en administratör.');
+      login();
+      return;
+    }
     await loadRegistries();
     await loadPasses();
   } catch(e){alert(e.message)}
@@ -74,7 +87,7 @@ function signOut(){auth=null;currentProfile=null;profiles=[];localStorage.remove
 async function loadProfiles(){
   if(!auth){currentProfile=null;profiles=[];return []}
   try{
-    profiles=await api('profiles?select=user_id,display_name,role,is_active,onboarding_complete,created_at&order=display_name.asc')||[];
+    profiles=await api('profiles?select=user_id,display_name,email,role,is_active,onboarding_complete,last_login_at,created_at&order=display_name.asc')||[];
     currentProfile=profiles.find(p=>p.user_id===auth.user?.id)||null;
     return profiles;
   }catch(e){
@@ -127,7 +140,7 @@ async function completePasswordSetup(){
     auth={access_token:cb.access_token,refresh_token:cb.refresh_token,user:data};
     localStorage.setItem(AUTH_KEY,JSON.stringify(auth));
     history.replaceState(null,'',location.pathname+location.search);
-    try{await api('profiles?user_id=eq.'+encodeURIComponent(data.id),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({onboarding_complete:true})})}catch(e){}
+    await markOwnProfileActive();
     await loadProfiles();await loadRegistries();await loadPasses();
     alert('Lösenordet är sparat. Du är nu inloggad.');
   }catch(e){alert(e.message)}
@@ -163,7 +176,32 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.1.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.1.2</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+
+function fmtDateTime(value){
+  if(!value)return '—';
+  try{return new Intl.DateTimeFormat('sv-SE',{dateStyle:'short',timeStyle:'short'}).format(new Date(value))}
+  catch{return value}
+}
+async function sendPasswordReset(email){
+  if(!email)return;
+  if(!confirm('Skicka en länk för nytt lösenord till '+email+'?'))return;
+  try{
+    await authFetch('recover',{method:'POST',body:JSON.stringify({email,redirect_to:location.origin+location.pathname})});
+    alert('Länk för nytt lösenord skickad till '+email+'.');
+  }catch(e){alert('Kunde inte skicka länken: '+e.message)}
+}
+async function resendInvite(email){
+  if(!email)return;
+  if(!confirm('Skicka en ny inbjudan till '+email+'?'))return;
+  try{
+    const res=await fetch(SUPABASE_URL+'/functions/v1/invite-user',{method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+auth.access_token,'Content-Type':'application/json'},body:JSON.stringify({email,resend:true,redirect_to:location.origin+location.pathname})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||data.message||'Kunde inte skicka ny inbjudan');
+    alert('Ny inbjudan skickad till '+email+'.');
+  }catch(e){alert('Kunde inte skicka ny inbjudan: '+e.message)}
+}
+
 async function showUsers(){
   if(!auth){login();return}
   await loadProfiles();
@@ -171,8 +209,25 @@ async function showUsers(){
   stop();setAppBrand();setHomeButton(true);
   const editable=isSuper();
   app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Användare</h1><div class="muted">${editable?'Hantera användare, roller och status.':'Översikt över registrerade användare.'}</div></div><button class="primary" onclick="showInviteUser()">+ BJUD IN ANVÄNDARE</button></div>
-  <div class="adminbox"><table class="admin-table"><thead><tr><th>Namn</th><th>Roll</th><th>Status</th><th></th></tr></thead><tbody>
-  ${profiles.map(p=>`<tr><td><b>${escAttr(p.display_name||'Namnlös')}</b>${p.user_id===auth.user?.id?' <span class="badge">Du</span>':''}</td><td>${editable&&p.user_id!==auth.user?.id?`<select onchange="updateUserRole('${p.user_id}',this.value)"><option value="instructor" ${p.role==='instructor'?'selected':''}>Instruktör</option><option value="admin" ${p.role==='admin'?'selected':''}>Admin</option><option value="super_user" ${p.role==='super_user'?'selected':''}>Super User</option></select>`:`<span class="badge">${roleLabel(p.role)}</span>`}</td><td><span class="status ${!p.is_active?'inactive':p.onboarding_complete?'active':'invited'}">${!p.is_active?'Inaktiv':p.onboarding_complete?'Aktiv':'Inbjuden'}</span></td><td>${editable&&p.user_id!==auth.user?.id?`<button class="smallbtn" onclick="toggleUserActive('${p.user_id}',${!p.is_active})">${p.is_active?'Inaktivera':'Aktivera'}</button>`:''}</td></tr>`).join('')}
+  <div class="adminbox user-admin-scroll"><table class="admin-table"><thead><tr><th>Namn / e-post</th><th>Roll</th><th>Status</th><th>Senast inloggad</th><th>Åtgärder</th></tr></thead><tbody>
+  ${profiles.map(p=>{
+    const status=!p.is_active?'Inaktiv':p.onboarding_complete?'Aktiv':'Inbjuden';
+    const cls=!p.is_active?'inactive':p.onboarding_complete?'active':'invited';
+    const email=p.email||'';
+    const actions=[];
+    if(p.user_id!==auth.user?.id){
+      if(!p.onboarding_complete && p.is_active && email) actions.push(`<button class="smallbtn" onclick="resendInvite('${escAttr(email)}')">Ny inbjudan</button>`);
+      if(p.onboarding_complete && email) actions.push(`<button class="smallbtn" onclick="sendPasswordReset('${escAttr(email)}')">Nytt lösenord</button>`);
+      if(editable) actions.push(`<button class="smallbtn" onclick="toggleUserActive('${p.user_id}',${!p.is_active})">${p.is_active?'Inaktivera':'Aktivera'}</button>`);
+    }
+    return `<tr>
+      <td><b>${escAttr(p.display_name||'Namnlös')}</b>${p.user_id===auth.user?.id?' <span class="badge">Du</span>':''}<div class="user-email">${escAttr(email||'Ingen e-post sparad')}</div></td>
+      <td>${editable&&p.user_id!==auth.user?.id?`<select onchange="updateUserRole('${p.user_id}',this.value)"><option value="instructor" ${p.role==='instructor'?'selected':''}>Instruktör</option><option value="admin" ${p.role==='admin'?'selected':''}>Admin</option><option value="super_user" ${p.role==='super_user'?'selected':''}>Super User</option></select>`:`<span class="badge">${roleLabel(p.role)}</span>`}</td>
+      <td><span class="status ${cls}">${status}</span></td>
+      <td class="nowrap">${fmtDateTime(p.last_login_at)}</td>
+      <td><div class="user-actions">${actions.join('')}</div></td>
+    </tr>`;
+  }).join('')}
   </tbody></table></div>`;
 }
 
@@ -529,4 +584,4 @@ function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+se
 function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
 
 homeBtn.onclick=goHome;
-(async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth)await loadProfiles();await loadRegistries();await loadPasses();checkResume()})();
+(async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth){await markOwnProfileActive();await loadProfiles();if(currentProfile&&!currentProfile.is_active){auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);alert('Ditt konto är inaktiverat. Kontakta en administratör.');login();return}}await loadRegistries();await loadPasses();checkResume()})();

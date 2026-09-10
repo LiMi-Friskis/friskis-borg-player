@@ -237,3 +237,10 @@ main{padding-top:24px;padding-bottom:76px}
 .linkbtn{border:0;background:transparent;padding:4px 0;color:#aeb9c0;text-decoration:underline;font-size:12px}
 .linkbtn:hover{color:#fff;background:transparent}
 .status.invited{background:#3d3517;color:#f6d76d}
+
+/* Prototype 2.1.2 – user management */
+.user-email{font-size:12px;color:#9aa5ad;margin-top:3px}
+.user-actions{display:flex;gap:6px;flex-wrap:wrap}
+.nowrap{white-space:nowrap}
+.user-admin-scroll{overflow-x:auto}
+.admin-table td{vertical-align:middle}

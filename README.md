@@ -1,13 +1,15 @@
-# Friskis Training Player — Prototype 2.1.1
+# Friskis Training Player — Prototype 2.1.2
 
-Prototype för Friskis Training Player.
+Nyheter:
+- Korrigerad status Inbjuden → Aktiv efter första lösenordet/inloggningen.
+- Säker server-side RPC för att markera den egna profilen som onboardad.
+- E-postadress i användarlistan.
+- Senast inloggad i användarlistan.
+- Ny inbjudan för användare som ännu inte slutfört onboarding.
+- Länk för nytt lösenord från användaradministrationen.
+- Inaktiverade användare stoppas i appen och RLS förhindrar skapande/redigering av pass.
+- Roller och status finns kvar från 2.1.x.
 
-Nyheter i 2.1.1:
-- Inbjudan av användare via e-post (Admin/Super User) via säker Supabase Edge Function.
-- Inbjuden användare sätter själv lösenord via länken i mejlet.
-- "Glömt lösenord?" på inloggningssidan.
-- Lösenordsåterställning via e-postlänk.
-- Status Inbjuden / Aktiv / Inaktiv i användarvyn.
-- © 2026 LiMi Equus AB. Alla rättigheter förbehållna.
+Nästa planerade steg: registervård innan ägaröverföring och privat delning.
 
-Se även SQL- och Edge Function-filerna i paketet.
+© 2026 LiMi Equus AB. Alla rättigheter förbehållna.
