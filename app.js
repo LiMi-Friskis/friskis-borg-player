@@ -37,8 +37,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.1.4'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.1.4')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.2.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.2.0')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -168,7 +168,7 @@ async function loadRegistries(){
 function userTools(){
   const name=currentProfile?.display_name||auth?.user?.email||'Användare';
   return `<div class="toplinks">
-    ${auth&&isAdmin()?`<button class="iconbtn" title="Användare" aria-label="Användare" onclick="showUsers()">♙</button>`:''}
+    ${auth&&isAdmin()?`<button class="iconbtn" title="Användare" aria-label="Användare" onclick="showUsers()">♙</button><button class="iconbtn" title="Register" aria-label="Register" onclick="showRegisters()">☷</button>`:''}
     <button class="iconbtn" title="Inställningar" aria-label="Inställningar" onclick="showSettings()">⚙</button>
     <button class="iconbtn" title="Hjälp" aria-label="Hjälp" onclick="showHelp()">?</button>
     ${auth?`<details class="usermenu"><summary>👤 ${escAttr(name)} ▾</summary><div class="usermenu-pop"><div><b>${escAttr(name)}</b><small>${roleLabel(currentProfile?.role)}</small></div><button onclick="signOut()">Logga ut</button></div></details>`:`<button onclick="login()">LOGGA IN</button>`}
@@ -177,7 +177,7 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.1.4</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.2.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -260,6 +260,187 @@ async function toggleUserActive(userId,value){
   const owns=passes.some(p=>p.remote&&p.owner_id===userId);
   if(!value&&owns){alert('Användaren äger fortfarande pass. Byt ägare på passen innan användaren inaktiveras.');return}
   try{await api('profiles?user_id=eq.'+encodeURIComponent(userId),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({is_active:value})});await loadProfiles();showUsers()}catch(e){alert('Kunde inte ändra status: '+e.message)}
+}
+
+
+const registerTabs=[
+  {key:'activities',label:'Aktiviteter'},
+  {key:'models',label:'Intensitetsmodeller'},
+  {key:'moments',label:'Moment'},
+  {key:'descriptions',label:'Beskrivningar'}
+];
+let activeRegisterTab='activities';
+let activeIntensityModelId=null;
+
+function safeCode(s){
+  return String(s||'').trim().toLowerCase().replace(/[åä]/g,'a').replace(/ö/g,'o').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+}
+function regSort(a,b){return (+a.sort_order||0)-(+b.sort_order||0)}
+function registerRowActions(kind,id,isActive){
+  return `<div class="reg-actions">
+    <button class="smallbtn" onclick="saveRegisterRow('${kind}','${id}')">Spara</button>
+    <button class="smallbtn" onclick="toggleRegisterRow('${kind}','${id}',${!isActive})">${isActive?'Inaktivera':'Aktivera'}</button>
+  </div>`;
+}
+async function showRegisters(tab=activeRegisterTab){
+  if(!auth||!isAdmin()){alert('Du saknar behörighet till registervården.');list();return}
+  activeRegisterTab=tab;
+  await loadRegistries();
+  stop();setAppBrand();setHomeButton(true);
+  app.innerHTML=`${userTools()}
+    <div class="toprow"><div><h1>Registervård</h1><div class="muted">Gemensamma register för Training Player. Inaktivera hellre än att radera sådant som redan kan användas i pass.</div></div></div>
+    <div class="register-tabs">${registerTabs.map(t=>`<button class="${t.key===tab?'active':''}" onclick="showRegisters('${t.key}')">${t.label}</button>`).join('')}</div>
+    <div id="registerPane"></div>`;
+  renderRegisterPane();
+}
+
+function renderRegisterPane(){
+  const pane=document.querySelector('#registerPane');
+  if(!pane)return;
+  if(activeRegisterTab==='activities') pane.innerHTML=renderActivitiesRegister();
+  else if(activeRegisterTab==='models') pane.innerHTML=renderModelsRegister();
+  else if(activeRegisterTab==='moments') pane.innerHTML=renderTextRegister('moments','Moment');
+  else pane.innerHTML=renderTextRegister('descriptions','Beskrivning');
+}
+
+function renderActivitiesRegister(){
+  const rows=[...registries.activities].sort(regSort);
+  return `<div class="adminbox register-box">
+    <div class="register-head"><div><h2>Aktiviteter</h2><div class="muted">Exempel: Spinning, Indoor Walking.</div></div><button class="primary smallbtn" onclick="addRegisterRow('activities')">+ NY AKTIVITET</button></div>
+    <div class="user-admin-scroll"><table class="admin-table register-table"><thead><tr><th>Namn</th><th>Kod</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr data-reg-kind="activities" data-id="${r.id}">
+      <td><input data-f="name" value="${escAttr(r.name||'')}"></td>
+      <td><input data-f="code" value="${escAttr(r.code||'')}"></td>
+      <td><input data-f="sort_order" type="number" value="${+r.sort_order||0}"></td>
+      <td><span class="status ${r.is_active?'active':'inactive'}">${r.is_active?'Aktiv':'Inaktiv'}</span></td>
+      <td>${registerRowActions('activities',r.id,!!r.is_active)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+function renderModelsRegister(){
+  const rows=[...registries.models].sort(regSort);
+  if(!activeIntensityModelId || !rows.some(r=>r.id===activeIntensityModelId)) activeIntensityModelId=rows[0]?.id||null;
+  return `<div class="adminbox register-box">
+    <div class="register-head"><div><h2>Intensitetsmodeller</h2><div class="muted">Borg finns redan. FTP kan aktiveras när zonerna är fastställda.</div></div><button class="primary smallbtn" onclick="addRegisterRow('models')">+ NY MODELL</button></div>
+    <div class="user-admin-scroll"><table class="admin-table register-table"><thead><tr><th>Namn</th><th>Kod</th><th>Typ</th><th>Enhet</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr data-reg-kind="models" data-id="${r.id}">
+      <td><input data-f="name" value="${escAttr(r.name||'')}"></td>
+      <td><input data-f="code" value="${escAttr(r.code||'')}"></td>
+      <td><select data-f="value_mode"><option value="exact" ${r.value_mode==='exact'?'selected':''}>Exakt</option><option value="zone" ${r.value_mode==='zone'?'selected':''}>Zon</option><option value="range" ${r.value_mode==='range'?'selected':''}>Intervall</option></select></td>
+      <td><input data-f="unit_label" value="${escAttr(r.unit_label||'')}"></td>
+      <td><input data-f="sort_order" type="number" value="${+r.sort_order||0}"></td>
+      <td><span class="status ${r.is_active?'active':'inactive'}">${r.is_active?'Aktiv':'Inaktiv'}</span></td>
+      <td><div class="reg-actions">${registerRowActions('models',r.id,!!r.is_active)}<button class="smallbtn" onclick="activeIntensityModelId='${r.id}';renderRegisterPane()">Värden</button></div></td>
+    </tr>`).join('')}
+    </tbody></table></div>
+    ${activeIntensityModelId?renderIntensityValues(activeIntensityModelId):''}
+  </div>`;
+}
+
+function renderIntensityValues(modelId){
+  const model=registries.models.find(m=>m.id===modelId);
+  const rows=registries.values.filter(v=>v.intensity_model_id===modelId).sort(regSort);
+  return `<div class="intensity-values">
+    <div class="register-head"><div><h3>Värden – ${escAttr(model?.name||'')}</h3><div class="muted">Färg används i passprofil och spelare.</div></div><button class="smallbtn" onclick="addIntensityValue('${modelId}')">+ NYTT VÄRDE</button></div>
+    <div class="user-admin-scroll"><table class="admin-table register-table values-table"><thead><tr><th>Etikett</th><th>Kod</th><th>Värde</th><th>Min</th><th>Max</th><th>Färg</th><th>Text</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr data-reg-kind="values" data-id="${r.id}">
+      <td><input data-f="label" value="${escAttr(r.label||'')}"></td>
+      <td><input data-f="code" value="${escAttr(r.code||'')}"></td>
+      <td><input data-f="numeric_value" type="number" step="0.1" value="${r.numeric_value??''}"></td>
+      <td><input data-f="min_value" type="number" step="0.1" value="${r.min_value??''}"></td>
+      <td><input data-f="max_value" type="number" step="0.1" value="${r.max_value??''}"></td>
+      <td><input data-f="color_hex" class="color-text" value="${escAttr(r.color_hex||'#888888')}"><input data-color-for="color_hex" type="color" value="${escAttr(r.color_hex||'#888888')}" oninput="this.previousElementSibling.value=this.value"></td>
+      <td><input data-f="text_color_hex" class="color-text" value="${escAttr(r.text_color_hex||'#ffffff')}"><input data-color-for="text_color_hex" type="color" value="${escAttr(r.text_color_hex||'#ffffff')}" oninput="this.previousElementSibling.value=this.value"></td>
+      <td><input data-f="sort_order" type="number" value="${+r.sort_order||0}"></td>
+      <td><span class="status ${r.is_active?'active':'inactive'}">${r.is_active?'Aktiv':'Inaktiv'}</span></td>
+      <td>${registerRowActions('values',r.id,!!r.is_active)}</td>
+    </tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+function renderTextRegister(kind,title){
+  const rows=[...registries[kind]].sort(regSort);
+  return `<div class="adminbox register-box">
+    <div class="register-head"><div><h2>${title}</h2><div class="muted">Förslag i editorn. Instruktören kan fortfarande skriva egen fritext.</div></div><button class="primary smallbtn" onclick="addRegisterRow('${kind}')">+ NYTT FÖRSLAG</button></div>
+    <div class="user-admin-scroll"><table class="admin-table register-table"><thead><tr><th>Text</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr data-reg-kind="${kind}" data-id="${r.id}">
+      <td><input data-f="text" value="${escAttr(r.text||'')}"></td>
+      <td><input data-f="sort_order" type="number" value="${+r.sort_order||0}"></td>
+      <td><span class="status ${r.is_active?'active':'inactive'}">${r.is_active?'Aktiv':'Inaktiv'}</span></td>
+      <td>${registerRowActions(kind,r.id,!!r.is_active)}</td>
+    </tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+function registerTable(kind){
+  return {activities:'activity_types',models:'intensity_models',values:'intensity_values',moments:'block_moment_suggestions',descriptions:'block_description_suggestions'}[kind];
+}
+function registerFields(kind){
+  return {
+    activities:['name','code','sort_order'],
+    models:['name','code','value_mode','unit_label','sort_order'],
+    values:['label','code','numeric_value','min_value','max_value','color_hex','text_color_hex','sort_order'],
+    moments:['text','sort_order'],
+    descriptions:['text','sort_order']
+  }[kind]||[];
+}
+function readRegisterRow(kind,id){
+  const tr=document.querySelector(`tr[data-reg-kind="${kind}"][data-id="${id}"]`);
+  if(!tr)throw new Error('Raden hittades inte.');
+  const obj={};
+  registerFields(kind).forEach(f=>{
+    const el=tr.querySelector(`[data-f="${f}"]`);
+    if(!el)return;
+    let v=el.value;
+    if(['sort_order','numeric_value','min_value','max_value'].includes(f)) v=v===''?null:+v;
+    obj[f]=v;
+  });
+  return obj;
+}
+async function saveRegisterRow(kind,id){
+  if(!isAdmin())return;
+  try{
+    const payload=readRegisterRow(kind,id);
+    if((kind==='activities'||kind==='models')&&!payload.code) payload.code=safeCode(payload.name);
+    await api(registerTable(kind)+'?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify(payload)});
+    await loadRegistries();renderRegisterPane();
+  }catch(e){alert('Kunde inte spara: '+e.message)}
+}
+async function toggleRegisterRow(kind,id,value){
+  if(!isAdmin())return;
+  try{
+    await api(registerTable(kind)+'?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({is_active:value})});
+    await loadRegistries();renderRegisterPane();
+  }catch(e){alert('Kunde inte ändra status: '+e.message)}
+}
+async function addRegisterRow(kind){
+  if(!isAdmin())return;
+  try{
+    const table=registerTable(kind);
+    let payload;
+    if(kind==='activities'){
+      const name=prompt('Namn på aktivitet:'); if(!name)return;
+      payload={name:name.trim(),code:safeCode(name),is_active:true,sort_order:(Math.max(0,...registries.activities.map(x=>+x.sort_order||0))+10)};
+    }else if(kind==='models'){
+      const name=prompt('Namn på intensitetsmodell:'); if(!name)return;
+      payload={name:name.trim(),code:safeCode(name),value_mode:'exact',unit_label:'',is_active:false,sort_order:(Math.max(0,...registries.models.map(x=>+x.sort_order||0))+10)};
+    }else{
+      const text=prompt(kind==='moments'?'Nytt moment:':'Ny beskrivning:'); if(!text)return;
+      payload={text:text.trim(),is_active:true,sort_order:(Math.max(0,...registries[kind].map(x=>+x.sort_order||0))+10)};
+    }
+    await api(table,{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(payload)});
+    await loadRegistries();renderRegisterPane();
+  }catch(e){alert('Kunde inte skapa: '+e.message)}
+}
+async function addIntensityValue(modelId){
+  if(!isAdmin())return;
+  try{
+    const label=prompt('Etikett för värdet/zonen:'); if(!label)return;
+    const siblings=registries.values.filter(v=>v.intensity_model_id===modelId);
+    const payload={intensity_model_id:modelId,label:label.trim(),code:safeCode(label),color_hex:'#888888',text_color_hex:'#ffffff',is_active:true,sort_order:(Math.max(0,...siblings.map(x=>+x.sort_order||0))+10)};
+    await api('intensity_values',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(payload)});
+    await loadRegistries();renderRegisterPane();
+  }catch(e){alert('Kunde inte skapa värde: '+e.message)}
 }
 
 function setSync(state,msg){

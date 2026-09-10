@@ -244,3 +244,22 @@ main{padding-top:24px;padding-bottom:76px}
 .nowrap{white-space:nowrap}
 .user-admin-scroll{overflow-x:auto}
 .admin-table td{vertical-align:middle}
+
+/* Prototype 2.2.0 – registervård */
+.register-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px}
+.register-tabs button{padding:9px 13px}
+.register-tabs button.active{background:#e31836;border-color:#e31836;color:#fff}
+.register-box{margin-bottom:20px}
+.register-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:12px}
+.register-head h2,.register-head h3{margin:0 0 4px}
+.register-table input,.register-table select{min-width:90px;width:100%;padding:8px}
+.register-table input[type="number"]{min-width:72px}
+.reg-actions{display:flex;gap:6px;flex-wrap:wrap}
+.intensity-values{margin-top:24px;padding-top:18px;border-top:1px solid #303743}
+.values-table{min-width:1180px}
+.values-table td:nth-child(6),.values-table td:nth-child(7){min-width:150px}
+.color-text{width:90px!important;min-width:90px!important;margin-right:6px}
+.register-table input[type="color"]{width:36px!important;min-width:36px!important;height:34px;padding:2px;vertical-align:middle}
+@media(max-width:800px){
+  .register-head{align-items:flex-start;flex-direction:column}
+}

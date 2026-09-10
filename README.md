@@ -1,14 +1,19 @@
-# Friskis Training Player — Prototype 2.1.4
+# Friskis Training Player — Prototype 2.2.0
 
-Fix:
-- Korrigerad redirect för lösenordsåterställning.
-- Supabase `recover` får nu `redirect_to` som query-parameter, vilket gör att hela GitHub Pages-sökvägen används:
-  `https://limi-friskis.github.io/friskis-borg-player/`
-- Gäller både:
-  - Glömt lösenord
-  - Nytt lösenord från användaradministrationen
+Ny modul: Registervård för Admin och Super User.
 
-Ingen ny SQL krävs.
-Ingen ändring av Edge Function `invite-user` krävs jämfört med 2.1.3.
+Kan administrera:
+- Aktiviteter
+- Intensitetsmodeller
+- Intensitetsvärden och färger
+- Momentförslag
+- Beskrivningsförslag
+
+Register kan redigeras direkt, sorteras via ordningsnummer och aktiveras/inaktiveras.
+Nya intensitetsmodeller skapas inaktiva som standard tills deras värden/zonsystem är färdigkonfigurerade.
+
+Nästa planerade större steg:
+1. Ägaröverföring
+2. Privat delning
 
 © 2026 LiMi Equus AB. Alla rättigheter förbehållna.
