@@ -197,7 +197,20 @@ function clearSession(){localStorage.removeItem(SESSION_KEY)}
 function checkResume(){try{let x=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!x||!x.pass||x.elapsed<=0||x.elapsed>=total(x.pass))return;stop();active={p:x.pass};elapsed=x.elapsed;liveView=x.view||liveView;setBrand(x.pass.name,'');setHomeButton(false);app.innerHTML=`<div class="resume-box"><h2>Återuppta pass?</h2><p><b>${x.pass.name}</b></p><p class="muted">Sparad position: ${fmt(x.elapsed)}</p><div class="actions"><button class="primary" onclick="resumePass()">ÅTERUPPTA</button><button onclick="restartSaved()">BÖRJA OM</button><button onclick="discardSaved()">MINA PASS</button></div></div>`}catch(e){}}
 function resumePass(){running=false;drawLive()} function restartSaved(){clearSession();elapsed=0;drawLive()} function discardSaved(){clearSession();list()}
 function confirmFinish(){if(confirm('Vill du avsluta passet?'))finishScreen()}
-function showCue(s){let k=s.i+'-'+s.left;if(s.left>0&&s.left<=3&&cueKey!==k){cueKey=k;let n=active.p.parts[s.i+1],el=document.createElement('div');el.className='overlay';el.innerHTML=`<div><div class="cue-number" style="color:${n?color(n.borg):'#fff'}">${s.left}</div><div class="cue-next">${n?'Nästa: '+n.moment+' · Borg '+n.borg:'Sista sekunderna'}</div></div>`;document.body.appendChild(el);setTimeout(()=>el.remove(),700)}}
+function showCue(s){
+  let k=s.i+'-'+s.left;
+  if(s.left>0 && s.left<=3 && cueKey!==k){
+    cueKey=k;
+    requestAnimationFrame(()=>{
+      const el=document.querySelector('.count, .ring-time');
+      if(!el)return;
+      el.classList.remove('block-time-blink');
+      void el.offsetWidth;
+      el.classList.add('block-time-blink');
+      setTimeout(()=>el.classList.remove('block-time-blink'),950);
+    });
+  }
+}
 function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;if(elapsed<total(active.p)){elapsed++;saveSession();drawLive()}else finishScreen()},1000)}
 
 function drawLive(){

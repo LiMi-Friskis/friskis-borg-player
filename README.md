@@ -1,8 +1,12 @@
-# Friskis Borg Player v1.7 – Demo Ready
-- Byt vy · Helskärm · Mina pass på gemensam topprad
-- Helskärmsfunktion
-- 3–2–1 cue före blockbyte
-- Återuppta pass efter omladdning
-- Valbar 10 sek förstart med “Starta musiken nu” sista 3 sek
-- Bekräftelse vid Avsluta
-- Supabase + lokalt 8-minuters demopass kvar
+# Friskis Borg Player v1.7.1
+
+Liten korrigering av demo-versionen:
+- Tog bort helskärms-overlayen med 3–2–1 före blockbyte.
+- De sista tre sekunderna blinkar nu endast den befintliga tidsvisningen.
+- Ingen extra text eller vy visas vid blockbyte.
+- Övriga funktioner från v1.7 är oförändrade.
+
+Planerat till senare version:
+- ljudsignaler
+- inställningsmeny via kugghjul
+- hjälpknapp
