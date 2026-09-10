@@ -1,16 +1,14 @@
-# Friskis Training Player — Prototype 2.1.3
+# Friskis Training Player — Prototype 2.1.4
 
 Fix:
-- Alla Auth-mejl använder nu en fast publik redirect:
+- Korrigerad redirect för lösenordsåterställning.
+- Supabase `recover` får nu `redirect_to` som query-parameter, vilket gör att hela GitHub Pages-sökvägen används:
   `https://limi-friskis.github.io/friskis-borg-player/`
-- Gäller:
+- Gäller både:
   - Glömt lösenord
   - Nytt lösenord från användaradministrationen
-  - Inbjudan
-  - Ny inbjudan
-- Ingen ny SQL krävs jämfört med 2.1.2.
-- `invite-user`-funktionen ska deployas på nytt med versionen i detta paket.
 
-Nästa planerade steg: registervård.
+Ingen ny SQL krävs.
+Ingen ändring av Edge Function `invite-user` krävs jämfört med 2.1.3.
 
 © 2026 LiMi Equus AB. Alla rättigheter förbehållna.
