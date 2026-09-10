@@ -227,3 +227,7 @@ main{padding-top:24px;padding-bottom:76px}
   .editor-actions{justify-content:stretch;flex-wrap:wrap}
   .editor-profile{height:42px}
 }
+
+
+/* Prototype 2.1.0 – users, roles and ownership */
+.usermenu{position:relative}.usermenu summary{list-style:none;cursor:pointer;border:1px solid #3a464d;border-radius:10px;padding:10px 13px;background:#141b1f;font-size:12px;font-weight:700}.usermenu summary::-webkit-details-marker{display:none}.usermenu-pop{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:#151c20;border:1px solid #354148;border-radius:12px;padding:12px;z-index:80;box-shadow:0 14px 40px #0008}.usermenu-pop small{display:block;color:#9eabb2;margin-top:3px}.usermenu-pop button{width:100%;margin-top:10px}.adminbox{background:#11181c;border:1px solid #354047;border-radius:16px;padding:18px}.admin-table select{min-width:145px}.status{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}.status.active{background:#173e2d;color:#70e2a7}.status.inactive{background:#432128;color:#ff8998}.smallbtn{padding:8px 10px;font-size:11px}.ownerbadge{background:#1b3031}.readonly-field{border:1px solid #354148;border-radius:7px;padding:10px;background:#101619;color:#cbd2d6}.meta-grid .owner-field{grid-column:span 1}

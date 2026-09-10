@@ -5,6 +5,7 @@ const KEY='friskis-training-passes';
 const AUTH_KEY='friskis-training-auth';
 const SETTINGS_KEY='friskis-training-settings';
 let auth=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');
+let currentProfile=null, profiles=[];
 let registries={activities:[],models:[],values:[],descriptions:[],moments:[]};
 let registryErrors=[];
 let settings=Object.assign({prestart:10,soundPrestart:false,soundBlock:false},JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'));
@@ -35,8 +36,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.0.3'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.0.3')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.1.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.1.0')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -61,10 +62,30 @@ async function authFetch(path,opts={}){
 }
 async function signIn(){
   const email=document.querySelector('#loginEmail')?.value.trim(), password=document.querySelector('#loginPassword')?.value||'';
-  try{auth=await authFetch('token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});localStorage.setItem(AUTH_KEY,JSON.stringify(auth));await loadRegistries();await loadPasses();}
-  catch(e){alert(e.message)}
+  try{
+    auth=await authFetch('token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
+    localStorage.setItem(AUTH_KEY,JSON.stringify(auth));
+    await loadProfiles();
+    await loadRegistries();
+    await loadPasses();
+  } catch(e){alert(e.message)}
 }
-function signOut(){auth=null;localStorage.removeItem(AUTH_KEY);loadPasses()}
+function signOut(){auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);loadPasses()}
+async function loadProfiles(){
+  if(!auth){currentProfile=null;profiles=[];return []}
+  try{
+    profiles=await api('profiles?select=user_id,display_name,role,is_active,created_at&order=display_name.asc')||[];
+    currentProfile=profiles.find(p=>p.user_id===auth.user?.id)||null;
+    return profiles;
+  }catch(e){
+    console.warn('Kunde inte ladda användarprofiler',e);currentProfile=null;profiles=[];return [];
+  }
+}
+function roleLabel(role){return ({instructor:'Instruktör',admin:'Admin',super_user:'Super User'})[role]||role||'Instruktör'}
+function isSuper(){return currentProfile?.role==='super_user'}
+function isAdmin(){return ['admin','super_user'].includes(currentProfile?.role)}
+function canEditPass(p){return !!auth && (p?.owner_id===auth.user?.id || isSuper())}
+function ownerName(p){const pr=profiles.find(x=>x.user_id===p?.owner_id);return pr?.display_name||((p?.owner_id===auth?.user?.id)?(currentProfile?.display_name||auth?.user?.email):'Okänd ägare')}
 function login(){stop();setAppBrand();setHomeButton(true);app.innerHTML=`<div class="loginbox"><h1>Logga in</h1><p class="muted">Publika pass kan köras utan konto. Inloggning krävs för att skapa och redigera.</p><input id="loginEmail" type="email" placeholder="E-post"><input id="loginPassword" type="password" placeholder="Lösenord" onkeydown="if(event.key==='Enter')signIn()"><div class="actions"><button class="primary" onclick="signIn()">LOGGA IN</button><button onclick="list()">AVBRYT</button></div></div>`}
 async function loadRegistries(){
   registryErrors=[];
@@ -84,10 +105,41 @@ async function loadRegistries(){
   if(registryErrors.length) console.warn('Registerfel',registryErrors);
   return registryErrors.length===0;
 }
-function userTools(){return `<div class="toplinks"><button class="iconbtn" title="Inställningar" aria-label="Inställningar" onclick="showSettings()">⚙</button><button class="iconbtn" title="Hjälp" aria-label="Hjälp" onclick="showHelp()">?</button>${auth?`<button class="userbtn" title="Logga ut" onclick="signOut()">${auth.user?.email||'Användare'} · Logga ut</button>`:`<button onclick="login()">LOGGA IN</button>`}</div>`}
+function userTools(){
+  const name=currentProfile?.display_name||auth?.user?.email||'Användare';
+  return `<div class="toplinks">
+    ${auth&&isAdmin()?`<button class="iconbtn" title="Användare" aria-label="Användare" onclick="showUsers()">♙</button>`:''}
+    <button class="iconbtn" title="Inställningar" aria-label="Inställningar" onclick="showSettings()">⚙</button>
+    <button class="iconbtn" title="Hjälp" aria-label="Hjälp" onclick="showHelp()">?</button>
+    ${auth?`<details class="usermenu"><summary>👤 ${escAttr(name)} ▾</summary><div class="usermenu-pop"><div><b>${escAttr(name)}</b><small>${roleLabel(currentProfile?.role)}</small></div><button onclick="signOut()">Logga ut</button></div></details>`:`<button onclick="login()">LOGGA IN</button>`}
+  </div>`
+}
+
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.0.3</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.1.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+async function showUsers(){
+  if(!auth){login();return}
+  await loadProfiles();
+  if(!isAdmin()){alert('Du saknar behörighet till användaradministrationen.');list();return}
+  stop();setAppBrand();setHomeButton(true);
+  const editable=isSuper();
+  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Användare</h1><div class="muted">${editable?'Hantera roller och status.':'Översikt över registrerade användare.'}</div></div></div>
+  <div class="adminbox"><table class="admin-table"><thead><tr><th>Namn</th><th>Roll</th><th>Status</th><th></th></tr></thead><tbody>
+  ${profiles.map(p=>`<tr><td><b>${escAttr(p.display_name||'Namnlös')}</b>${p.user_id===auth.user?.id?' <span class="badge">Du</span>':''}</td><td>${editable&&p.user_id!==auth.user?.id?`<select onchange="updateUserRole('${p.user_id}',this.value)"><option value="instructor" ${p.role==='instructor'?'selected':''}>Instruktör</option><option value="admin" ${p.role==='admin'?'selected':''}>Admin</option><option value="super_user" ${p.role==='super_user'?'selected':''}>Super User</option></select>`:`<span class="badge">${roleLabel(p.role)}</span>`}</td><td><span class="status ${p.is_active?'active':'inactive'}">${p.is_active?'Aktiv':'Inaktiv'}</span></td><td>${editable&&p.user_id!==auth.user?.id?`<button class="smallbtn" onclick="toggleUserActive('${p.user_id}',${!p.is_active})">${p.is_active?'Inaktivera':'Aktivera'}</button>`:''}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+async function updateUserRole(userId,role){
+  if(!isSuper())return;
+  try{await api('profiles?user_id=eq.'+encodeURIComponent(userId),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({role})});await loadProfiles();showUsers()}catch(e){alert('Kunde inte ändra roll: '+e.message)}
+}
+async function toggleUserActive(userId,value){
+  if(!isSuper())return;
+  const owns=passes.some(p=>p.remote&&p.owner_id===userId);
+  if(!value&&owns){alert('Användaren äger fortfarande pass. Byt ägare på passen innan användaren inaktiveras.');return}
+  try{await api('profiles?user_id=eq.'+encodeURIComponent(userId),{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({is_active:value})});await loadProfiles();showUsers()}catch(e){alert('Kunde inte ändra status: '+e.message)}
+}
+
 function setSync(state,msg){
   const el=document.querySelector('#syncState');
   if(!el)return;
@@ -157,13 +209,14 @@ function activityName(p){return registries.activities.find(x=>x.id===p.activity_
 function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_id)?.name||'Borg'}
 function list(){
   stop(); setAppBrand(); setHomeButton(false);
-  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+(auth.user?.email||'användare'):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div>
-  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span><span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span></div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
-  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${auth?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:''}</div></div>`).join('')}</div>`;
+  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div>
+  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${escAttr(p.name)}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span><span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span>${auth&&p.remote?`<span class="badge ownerbadge">👤 ${escAttr(ownerName(p))}</span>`:''}</div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
+  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&p.remote?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
   setSync(online?'ok':'err',online?'Centralt sparat':'Lokalt läge');
 }
 async function edit(i){
   if(!auth){login();return}
+  if(i!=null && !canEditPass(passes[i])){alert('Du kan bara redigera pass som du äger. Super User kan redigera alla pass.');return}
   stop(); setAppBrand(); setHomeButton(true);
   if(!registries.activities.length || !registries.models.length){
     await loadRegistries();
@@ -186,7 +239,7 @@ function drawEdit(focus=null){
   const pageTitle=active.i==null?'Skapa nytt pass':'Redigera pass';
   app.innerHTML=`<div class="editor-head"><div><h1>${pageTitle}</h1><div class="muted">Direktredigera tabellen. Moment och beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
   <input class="name" id="pname" value="${escAttr(p.name)}" oninput="active.p.name=this.value">
-  <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div></div>
+  <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div>${isSuper()?`<div class="field owner-field"><label>Ägare</label><select onchange="active.p.owner_id=this.value">${profiles.filter(x=>x.is_active!==false).map(x=>`<option value="${x.user_id}" ${x.user_id===p.owner_id?'selected':''}>${escAttr(x.display_name||'Användare')} · ${roleLabel(x.role)}</option>`).join('')}</select></div>`:`<div class="field owner-field"><label>Ägare</label><div class="readonly-field">${escAttr(ownerName(p))}</div></div>`}</div>
   <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile editor-profile')}
   <datalist id="momentSuggestions">${moments}</datalist><datalist id="descriptionSuggestions">${descriptions}</datalist>
@@ -230,7 +283,7 @@ async function saveEdit(){
 }
 function preview(){active.p.name=document.querySelector('#pname').value||active.p.name;startPlayer(active.p)}
 async function duplicate(i){
-  const p=structuredClone(passes[i]); p.id=null; p.remote=false; p.name+=' – kopia';
+  const p=structuredClone(passes[i]); p.id=null; p.remote=false; p.owner_id=auth?.user?.id||null; p.visibility='private'; p.name+=' – kopia';
   try{const saved=await upsertPass(p,true);passes.unshift(saved)}catch(e){online=false;passes.unshift(p)}
   cache(); list();
 }
@@ -410,4 +463,4 @@ function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+se
 function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
 
 homeBtn.onclick=goHome;
-loadRegistries().then(()=>loadPasses()).then(()=>checkResume());
+(async()=>{if(auth)await loadProfiles();await loadRegistries();await loadPasses();checkResume()})();
