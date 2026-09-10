@@ -1,12 +1,10 @@
-# Friskis Training Player — Prototype 2.2.4
+# Friskis Training Player — Prototype 2.2.5
 
-Ljudet använder nu riktiga WAV-filer i stället för genererade Web Audio-toner.
-
-Nytt:
-- `beep-countdown.wav` för 3–2–1
-- `beep-block.wav` för blockbyte
-- ljudfilerna förladdas/låses upp när användaren startar passet
-- TP-ikonerna från 2.2.3 är kvar
+Akut fix efter 2.2.4:
+- återställd förstartsfunktionen som räknar ner och faktiskt startar passet
+- borttaget det hörbara testpipet vid klick på Start
+- riktiga WAV-filer används fortfarande för 3–2–1 och blockbyte
+- TP-ikonerna är kvar
 
 Ingen SQL.
 Ingen Edge Function.
