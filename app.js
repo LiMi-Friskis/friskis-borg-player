@@ -1,7 +1,12 @@
 
 const SUPABASE_URL='https://eaapffhepvbfcryayipx.supabase.co';
 const SUPABASE_KEY='sb_publishable_TP0UobkURSjVgu5QU7neRA_dfBfVMrN';
-const KEY='friskis-borg-passes';
+const KEY='friskis-training-passes';
+const AUTH_KEY='friskis-training-auth';
+const SETTINGS_KEY='friskis-training-settings';
+let auth=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');
+let registries={activities:[],models:[],values:[],descriptions:[]};
+let settings=Object.assign({prestart:10,soundPrestart:false,soundBlock:false},JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'));
 
 const demo={id:'demo-local',name:'Spinning 45 – Intervall',parts:[
 ['5:00',10,'Uppvärmning','Hitta rytmen'],['4:00',12,'Tempo','Öka successivt'],['3:00',14,'Backe – sittande','Kontrollerat'],
@@ -27,7 +32,7 @@ const homeBtn=document.querySelector('#home');
 
 const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)};
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
-function color(b){b=+b;if(b<=9)return'#2868d8';if(b<=11)return'#38b978';if(b<=13)return'#b8d83c';if(b<=14)return'#ffd02d';if(b<=16)return'#ff8a27';return'#ef1738'}
+function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
 function setBrand(title='MINA PASS',sub='VÄLJ ETT PASS ELLER SKAPA ETT NYTT'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
@@ -37,7 +42,7 @@ function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catc
 function headers(extra={}) {
   return {
     'apikey': SUPABASE_KEY,
-    'Authorization': 'Bearer '+SUPABASE_KEY,
+    'Authorization': 'Bearer '+(auth?.access_token||SUPABASE_KEY),
     'Content-Type':'application/json',
     ...extra
   };
@@ -48,6 +53,27 @@ async function api(path,opts={}) {
   const text=await res.text();
   return text?JSON.parse(text):null;
 }
+async function authFetch(path,opts={}){
+  const res=await fetch(SUPABASE_URL+'/auth/v1/'+path,{...opts,headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json',...(opts.headers||{})}});
+  const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.msg||data.error_description||data.message||'Inloggning misslyckades'); return data;
+}
+async function signIn(){
+  const email=document.querySelector('#loginEmail')?.value.trim(), password=document.querySelector('#loginPassword')?.value||'';
+  try{auth=await authFetch('token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});localStorage.setItem(AUTH_KEY,JSON.stringify(auth));await loadRegistries();await loadPasses();}
+  catch(e){alert(e.message)}
+}
+function signOut(){auth=null;localStorage.removeItem(AUTH_KEY);loadPasses()}
+function login(){stop();setBrand('LOGGA IN','FÖR ATT SKAPA OCH REDIGERA PASS');setHomeButton(true);app.innerHTML=`<div class="loginbox"><h1>Logga in</h1><p class="muted">Publika pass kan köras utan konto. Inloggning krävs för att skapa och redigera.</p><input id="loginEmail" type="email" placeholder="E-post"><input id="loginPassword" type="password" placeholder="Lösenord" onkeydown="if(event.key==='Enter')signIn()"><div class="actions"><button class="primary" onclick="signIn()">LOGGA IN</button><button onclick="list()">AVBRYT</button></div></div>`}
+async function loadRegistries(){
+ try{
+  const [a,m,v,d]=await Promise.all([api('activity_types?select=*&order=sort_order'),api('intensity_models?select=*&order=sort_order'),api('intensity_values?select=*&order=sort_order'),api('block_description_suggestions?select=*&order=sort_order')]);
+  registries={activities:a||[],models:m||[],values:v||[],descriptions:d||[]};
+ }catch(e){console.warn('Register kunde inte läsas',e)}
+}
+function userTools(){return `<div class="toplinks"><button onclick="showSettings()">⚙ INSTÄLLNINGAR</button><button onclick="showHelp()">? HJÄLP</button>${auth?`<button onclick="signOut()">LOGGA UT</button>`:`<button onclick="login()">LOGGA IN</button>`}</div>`}
+function showSettings(){setBrand('INSTÄLLNINGAR','SPARAS LOKALT PÅ DEN HÄR ENHETEN');setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
+function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
+function showHelp(){setBrand('HJÄLP','FRISKIS TRAINING PLAYER');setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 function setSync(state,msg){
   const el=document.querySelector('#syncState');
   if(!el)return;
@@ -61,13 +87,13 @@ async function loadPasses(){
   list();
   setSync('work','Synkar...');
   try{
-    const rows=await api('passes?select=id,name,parts,updated_at&order=updated_at.desc');
+    const rows=await api('passes?select=id,name,parts,updated_at,owner_id,visibility,activity_type_id,intensity_model_id&order=updated_at.desc');
     online=true;
 
     const remotePasses=(rows||[]).map(r=>({
       id:r.id,
       name:r.name,
-      parts:r.parts||[],
+      parts:r.parts||[],owner_id:r.owner_id,visibility:r.visibility||'public',activity_type_id:r.activity_type_id,intensity_model_id:r.intensity_model_id,
       remote:true
     }));
 
@@ -89,21 +115,21 @@ async function loadPasses(){
 }
 async function upsertPass(p,isNew){
   if(!online){cache();return p}
-  const body={name:p.name,parts:p.parts,updated_at:new Date().toISOString()};
+  const body={name:p.name,parts:p.parts,updated_at:new Date().toISOString(),visibility:p.visibility||'public',activity_type_id:p.activity_type_id||null,intensity_model_id:p.intensity_model_id||null}; if(auth?.user?.id)body.owner_id=p.owner_id||auth.user.id;
   if(isNew || !p.remote){
-    const rows=await api('passes?select=id,name,parts,updated_at',{
+    const rows=await api('passes?select=id,name,parts,updated_at,owner_id,visibility,activity_type_id,intensity_model_id',{
       method:'POST',
       headers:{'Prefer':'return=representation'},
       body:JSON.stringify(body)
     });
-    const r=rows[0]; return {id:r.id,name:r.name,parts:r.parts||[],remote:true};
+    const r=rows[0]; return {...p,...r,parts:r.parts||[],remote:true};
   }else{
     const rows=await api('passes?id=eq.'+encodeURIComponent(p.id)+'&select=id,name,parts,updated_at',{
       method:'PATCH',
       headers:{'Prefer':'return=representation'},
       body:JSON.stringify(body)
     });
-    const r=rows[0]; return {id:r.id,name:r.name,parts:r.parts||[],remote:true};
+    const r=rows[0]; return {...p,...r,parts:r.parts||[],remote:true};
   }
 }
 async function deleteRemote(p){
@@ -113,32 +139,38 @@ async function deleteRemote(p){
 
 function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/T*100}%;height:${Math.max(15,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}</div>`}
 
+function activityName(p){return registries.activities.find(x=>x.id===p.activity_type_id)?.name||'Spinning'}
+function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_id)?.name||'Borg'}
 function list(){
-  stop(); setBrand(); setHomeButton(false);
-  app.innerHTML=`<div class="toprow"><div><h1>Mina pass</h1><div class="muted">Välj ett pass eller skapa ett nytt <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="edit()">+ SKAPA NYTT PASS</button></div>
-  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div class="muted">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
-  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button><button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button></div></div>`).join('')}</div>`;
+  stop(); setBrand('MINA PASS','VÄLJ ETT PASS ELLER SKAPA ETT NYTT'); setHomeButton(false);
+  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+(auth.user?.email||'användare'):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div>
+  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span><span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span></div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
+  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${auth?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:''}</div></div>`).join('')}</div>`;
   setSync(online?'ok':'err',online?'Centralt sparat':'Lokalt läge');
 }
-
 function edit(i){
+  if(!auth){login();return}
   stop(); setBrand('REDIGERA PASS','SKAPA ELLER ÄNDRA ETT PASS'); setHomeButton(true);
-  let p=i==null?{id:null,name:'Nytt pass',parts:[{id:1,time:'5:00',borg:10,moment:'Uppvärmning',instruction:''}],remote:false}:structuredClone(passes[i]);
+  let borg=registries.models.find(x=>x.code==='borg'), spin=registries.activities.find(x=>x.code==='spinning'); let p=i==null?{id:null,name:'Nytt pass',visibility:'private',owner_id:auth.user.id,activity_type_id:spin?.id||null,intensity_model_id:borg?.id||null,parts:[{id:1,time:'5:00',borg:10,moment:'Uppvärmning',instruction:''}],remote:false}:structuredClone(passes[i]);
   active={p,i}; drawEdit();
 }
 function drawEdit(){
-  let p=active.p;
-  app.innerHTML=`<h1>Skapa / redigera pass</h1><div class="editor">
+  let p=active.p; const model=registries.models.find(x=>x.id===p.intensity_model_id); const isBorg=!model||model.code==='borg';
+  const suggestions=registries.descriptions.filter(x=>x.is_active!==false).map(x=>`<option value="${String(x.text).replaceAll('"','&quot;')}"></option>`).join('');
+  app.innerHTML=`<div class="editor-head"><div><h1>Skapa / redigera pass</h1><div class="muted">Direktredigera tabellen. Beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
   <input class="name" id="pname" value="${p.name.replaceAll('"','&quot;')}">
+  <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div></div>
+  <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile')}
+  <datalist id="descriptionSuggestions">${suggestions}</datalist>
   <div id="rows">${p.parts.map((x,j)=>`<div class="row"><b>${j+1}</b>
   <input value="${x.time}" onchange="chg(${j},'time',this.value)">
-  <input class="borginput" type="number" min="6" max="20" value="${x.borg}" onchange="chg(${j},'borg',this.value)">
+  ${isBorg?`<select class="borginput" onchange="chg(${j},'borg',this.value)" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<input value="${x.intensity||''}" placeholder="FTP">`}
   <input value="${(x.moment||'').replaceAll('"','&quot;')}" placeholder="Moment" onchange="chg(${j},'moment',this.value)">
-  <input class="instruction" value="${(x.instruction||'').replaceAll('"','&quot;')}" placeholder="Instruktion" onchange="chg(${j},'instruction',this.value)">
+  <input class="instruction" list="descriptionSuggestions" value="${(x.instruction||'').replaceAll('"','&quot;')}" placeholder="Beskrivning" onchange="chg(${j},'instruction',this.value)">
   <button onclick="removePart(${j})">×</button></div>`).join('')}</div>
   <p><b>Total tid: ${fmt(total(p))}</b></p>
-  <div class="actions"><button onclick="addPart()">+ LÄGG TILL DEL</button><button class="primary" onclick="saveEdit()">SPARA PASS</button><button onclick="preview()">▶ PROVKÖR</button></div></div>`;
+  <div class="actions"><button onclick="addPart()">+ LÄGG TILL BLOCK</button><button class="primary" onclick="saveEdit()">SPARA PASS</button><button onclick="preview()">▶ PROVKÖR</button></div></div>`;
 }
 function chg(i,k,v){active.p.parts[i][k]=k==='borg'?Math.max(6,Math.min(20,+v)):v;drawEdit()}
 function addPart(){active.p.parts.push({id:Date.now(),time:'2:00',borg:12,moment:'Ny del',instruction:''});drawEdit()}
@@ -172,7 +204,7 @@ async function del(i){
 function run(i){startPlayer(passes[i])}
 function startPlayer(p){
  stop();setBrand(p.name,'');setHomeButton(false);active={p};elapsed=0;
- app.innerHTML=`<div class="start-choice"><h2>${p.name}</h2><p class="muted">Hur vill du starta passet?</p><div class="actions"><button class="primary" onclick="beginPass(10)">10 SEK FÖRSTART</button><button onclick="beginPass(0)">STARTA DIREKT</button><button onclick="list()">AVBRYT</button></div></div>`;
+ beginPass(settings.prestart||0);
 }
 function beginPass(n){if(n)runPrestart(n);else{saveSession();drawLive()}}
 function runPrestart(n){
@@ -324,4 +356,4 @@ function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+se
 function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
 
 homeBtn.onclick=goHome;
-loadPasses().then(()=>checkResume());
+loadRegistries().then(()=>loadPasses()).then(()=>checkResume());
