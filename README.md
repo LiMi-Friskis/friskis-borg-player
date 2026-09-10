@@ -1,19 +1,14 @@
-# Friskis Training Player — Prototype 2.2.0
+# Friskis Training Player — Prototype 2.2.1
 
-Ny modul: Registervård för Admin och Super User.
+Liten stabilitetsfix för ljudet. Inga andra funktioner är ändrade från Prototype 2.2.0.
 
-Kan administrera:
-- Aktiviteter
-- Intensitetsmodeller
-- Intensitetsvärden och färger
-- Momentförslag
-- Beskrivningsförslag
+Ändrat:
+- Web Audio låses upp mer robust vid start av pass.
+- Safari/iPhone/iPad väntar nu på att AudioContext verkligen har återupptagits.
+- Ljudkontext återupptas när appen kommer tillbaka från bakgrunden.
+- Gäller både 3–2–1-ljud och blockbytesljud.
 
-Register kan redigeras direkt, sorteras via ordningsnummer och aktiveras/inaktiveras.
-Nya intensitetsmodeller skapas inaktiva som standard tills deras värden/zonsystem är färdigkonfigurerade.
-
-Nästa planerade större steg:
-1. Ägaröverföring
-2. Privat delning
+Ingen ny SQL krävs.
+Ingen Edge Function behöver ändras.
 
 © 2026 LiMi Equus AB. Alla rättigheter förbehållna.
