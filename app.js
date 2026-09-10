@@ -18,6 +18,8 @@ const shortDemo={id:'demo-short',name:'Kort demo – 8 min',parts:[
 
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
 let liveView=localStorage.getItem('friskis-live-view')||'clean';
+let cueKey='', prestartTimer=null;
+const SESSION_KEY='friskis-active-session';
 const app=document.querySelector('#app');
 const brandTitle=document.querySelector('#brandTitle');
 const brandSub=document.querySelector('#brandSub');
@@ -168,13 +170,35 @@ async function del(i){
 }
 
 function run(i){startPlayer(passes[i])}
-function startPlayer(p){stop();setBrand(p.name,'');setHomeButton(true);active={p};elapsed=0;drawLive()}
+function startPlayer(p){
+ stop();setBrand(p.name,'');setHomeButton(false);active={p};elapsed=0;
+ app.innerHTML=`<div class="start-choice"><h2>${p.name}</h2><p class="muted">Hur vill du starta passet?</p><div class="actions"><button class="primary" onclick="beginPass(10)">10 SEK FÖRSTART</button><button onclick="beginPass(0)">STARTA DIREKT</button><button onclick="list()">AVBRYT</button></div></div>`;
+}
+function beginPass(n){if(n)runPrestart(n);else{saveSession();drawLive()}}
+function runPrestart(n){
+ let left=n;
+ const render=()=>app.innerHTML=`<div class="overlay"><div><h2>PASS STARTAR OM</h2><div class="prestart-number">${left}</div><div class="prestart-hint">${left<=3?'STARTA MUSIKEN NU':'GÖR DIG REDO'}</div></div></div>`;
+ render();
+ prestartTimer=setInterval(()=>{left--;if(left<=0){clearInterval(prestartTimer);prestartTimer=null;running=true;saveSession();startTicker();drawLive()}else render()},1000);
+}
 function state(){let p=active.p,c=0;for(let i=0;i<p.parts.length;i++){let d=sec(p.parts[i].time);if(elapsed<c+d)return{i,part:p.parts[i],into:elapsed-c,left:d-(elapsed-c)};c+=d}return{i:p.parts.length-1,part:p.parts.at(-1),into:sec(p.parts.at(-1).time),left:0}}
 function switchView(){liveView=liveView==='clean'?'dashboard':'clean';localStorage.setItem('friskis-live-view',liveView);drawLive()}
-function finishScreen(){stop();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
+function finishScreen(){stop();clearSession();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
 function restartPass(){elapsed=0;running=false;drawLive()}
-function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="finishScreen()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
+function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="confirmFinish()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
 
+
+
+function trainingActions(){return `<div class="training-actions"><button onclick="switchView()">▣ BYT VY</button><button onclick="toggleFullscreen()">⛶ HELSKÄRM</button><button onclick="goHome()">MINA PASS</button></div>`}
+async function toggleFullscreen(){try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}catch(e){alert('Helskärm stöds inte fullt ut i den här webbläsaren. Prova Lägg till på hemskärmen på iPad/iPhone.')}}
+function goHome(){stop();clearSession();setHomeButton(false);list()}
+function saveSession(){if(active&&active.p)localStorage.setItem(SESSION_KEY,JSON.stringify({pass:active.p,elapsed,view:liveView}))}
+function clearSession(){localStorage.removeItem(SESSION_KEY)}
+function checkResume(){try{let x=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!x||!x.pass||x.elapsed<=0||x.elapsed>=total(x.pass))return;stop();active={p:x.pass};elapsed=x.elapsed;liveView=x.view||liveView;setBrand(x.pass.name,'');setHomeButton(false);app.innerHTML=`<div class="resume-box"><h2>Återuppta pass?</h2><p><b>${x.pass.name}</b></p><p class="muted">Sparad position: ${fmt(x.elapsed)}</p><div class="actions"><button class="primary" onclick="resumePass()">ÅTERUPPTA</button><button onclick="restartSaved()">BÖRJA OM</button><button onclick="discardSaved()">MINA PASS</button></div></div>`}catch(e){}}
+function resumePass(){running=false;drawLive()} function restartSaved(){clearSession();elapsed=0;drawLive()} function discardSaved(){clearSession();list()}
+function confirmFinish(){if(confirm('Vill du avsluta passet?'))finishScreen()}
+function showCue(s){let k=s.i+'-'+s.left;if(s.left>0&&s.left<=3&&cueKey!==k){cueKey=k;let n=active.p.parts[s.i+1],el=document.createElement('div');el.className='overlay';el.innerHTML=`<div><div class="cue-number" style="color:${n?color(n.borg):'#fff'}">${s.left}</div><div class="cue-next">${n?'Nästa: '+n.moment+' · Borg '+n.borg:'Sista sekunderna'}</div></div>`;document.body.appendChild(el);setTimeout(()=>el.remove(),700)}}
+function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;if(elapsed<total(active.p)){elapsed++;saveSession();drawLive()}else finishScreen()},1000)}
 
 function drawLive(){
   let p=active.p,T=total(p);
@@ -184,7 +208,8 @@ function drawLive(){
   const partDuration=sec(s.part.time)||1;
   const progressPct=Math.max(0,Math.min(100,(s.into/partDuration)*100));
   const storageRemote=!!p.remote;
-  const switchButton=`<button class="top-view-switch" onclick="switchView()">▣ BYT VY</button>`;
+  if(running)setTimeout(()=>showCue(s),0);
+  const switchButton=trainingActions();
 
   if(liveView==='dashboard'){
     app.innerHTML=`${switchButton}<div class="dashboard">
@@ -231,7 +256,7 @@ function drawLive(){
       <div class="controls">
         <button onclick="prev()">◀ FÖREGÅENDE</button>
         <button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button>
-        <button onclick="finishScreen()">■ AVSLUTA</button>
+        <button onclick="confirmFinish()">■ AVSLUTA</button>
         <button onclick="next()">NÄSTA ▶</button>
       </div>
 
@@ -275,21 +300,15 @@ function drawLive(){
     <div class="controls">
       <button onclick="prev()">◀ FÖREGÅENDE</button>
       <button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button>
-      <button onclick="finishScreen()">■ AVSLUTA</button>
+      <button onclick="confirmFinish()">■ AVSLUTA</button>
       <button onclick="next()">NÄSTA ▶</button>
     </div>
   </div>`;
 }
-function toggle(){
-  if(running){running=false;if(timer){clearInterval(timer);timer=null}drawLive();return}
-  if(elapsed>=total(active.p))elapsed=0;
-  running=true;
-  timer=setInterval(()=>{if(!running)return;if(elapsed<total(active.p)){elapsed++;drawLive()}else{finishScreen()}},1000);
-  drawLive();
-}
+function toggle(){if(running){running=false;if(timer){clearInterval(timer);timer=null}saveSession();drawLive();return}if(elapsed>=total(active.p))elapsed=0;running=true;saveSession();startTicker();drawLive()}
 function stop(){running=false;if(timer){clearInterval(timer);timer=null}}
 function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+sec(x.time),0);elapsed=Math.min(total(active.p),c);drawLive()}
 function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
 
-homeBtn.onclick=list;
-loadPasses();
+homeBtn.onclick=goHome;
+loadPasses().then(()=>checkResume());

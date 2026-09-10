@@ -162,3 +162,9 @@ footer{position:fixed;bottom:0;left:0;right:0;padding:18px 4vw;background:#080b0
     font-size:11px;
   }
 }
+
+.training-actions{position:fixed;top:31px;right:4vw;z-index:60;display:flex;gap:10px;align-items:center}.training-actions button{height:42px;padding:0 16px;font-size:12px}
+.overlay{position:fixed;inset:0;z-index:100;background:#070a0ddd;display:flex;align-items:center;justify-content:center;text-align:center;backdrop-filter:blur(5px)}
+.cue-number,.prestart-number{font-size:min(32vw,320px);font-weight:900;line-height:.9}.cue-next,.prestart-hint{font-size:27px;margin-top:25px;color:#d4d8da}
+.start-choice,.resume-box{background:#10161a;border:1px solid #354047;border-radius:20px;padding:32px;max-width:560px;margin:80px auto;text-align:center}.start-choice .actions,.resume-box .actions{justify-content:center}
+@media(max-width:800px){.training-actions{top:24px;right:3vw;gap:6px}.training-actions button{height:38px;padding:0 10px;font-size:10px}}

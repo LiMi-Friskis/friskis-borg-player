@@ -1,10 +1,8 @@
-# Friskis Borg Player v1.6.2
-
-Ändringar:
-- Tar bort den dubbla headingen i dashboard-vyn.
-- `Byt vy` ligger nu på samma plats i båda träningsvyerna.
-- Det lokala 8-minuters demopasset behålls alltid, även när Supabase har centrala pass.
-- Centrala pass fortsätter komma från Supabase.
-- Grön/röd lagringsindikator, firande och båda träningsvyerna är kvar.
-
-Supabase-konfigurationen från v1.5 är oförändrad.
+# Friskis Borg Player v1.7 – Demo Ready
+- Byt vy · Helskärm · Mina pass på gemensam topprad
+- Helskärmsfunktion
+- 3–2–1 cue före blockbyte
+- Återuppta pass efter omladdning
+- Valbar 10 sek förstart med “Starta musiken nu” sista 3 sek
+- Bekräftelse vid Avsluta
+- Supabase + lokalt 8-minuters demopass kvar
