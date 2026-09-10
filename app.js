@@ -6,6 +6,7 @@ const AUTH_KEY='friskis-training-auth';
 const SETTINGS_KEY='friskis-training-settings';
 let auth=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');
 let registries={activities:[],models:[],values:[],descriptions:[]};
+let registryErrors=[];
 let settings=Object.assign({prestart:10,soundPrestart:false,soundBlock:false},JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'));
 
 const demo={id:'demo-local',name:'Spinning 45 – Intervall',parts:[
@@ -34,7 +35,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='MINA PASS',sub='VÄLJ ETT PASS ELLER SKAPA ETT NYTT'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.0.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.0.1')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -63,17 +65,28 @@ async function signIn(){
   catch(e){alert(e.message)}
 }
 function signOut(){auth=null;localStorage.removeItem(AUTH_KEY);loadPasses()}
-function login(){stop();setBrand('LOGGA IN','FÖR ATT SKAPA OCH REDIGERA PASS');setHomeButton(true);app.innerHTML=`<div class="loginbox"><h1>Logga in</h1><p class="muted">Publika pass kan köras utan konto. Inloggning krävs för att skapa och redigera.</p><input id="loginEmail" type="email" placeholder="E-post"><input id="loginPassword" type="password" placeholder="Lösenord" onkeydown="if(event.key==='Enter')signIn()"><div class="actions"><button class="primary" onclick="signIn()">LOGGA IN</button><button onclick="list()">AVBRYT</button></div></div>`}
+function login(){stop();setAppBrand();setHomeButton(true);app.innerHTML=`<div class="loginbox"><h1>Logga in</h1><p class="muted">Publika pass kan köras utan konto. Inloggning krävs för att skapa och redigera.</p><input id="loginEmail" type="email" placeholder="E-post"><input id="loginPassword" type="password" placeholder="Lösenord" onkeydown="if(event.key==='Enter')signIn()"><div class="actions"><button class="primary" onclick="signIn()">LOGGA IN</button><button onclick="list()">AVBRYT</button></div></div>`}
 async function loadRegistries(){
- try{
-  const [a,m,v,d]=await Promise.all([api('activity_types?select=*&order=sort_order'),api('intensity_models?select=*&order=sort_order'),api('intensity_values?select=*&order=sort_order'),api('block_description_suggestions?select=*&order=sort_order')]);
-  registries={activities:a||[],models:m||[],values:v||[],descriptions:d||[]};
- }catch(e){console.warn('Register kunde inte läsas',e)}
+  registryErrors=[];
+  const specs=[
+    ['activities','activity_types?select=id,code,name,is_active,sort_order&order=sort_order.asc'],
+    ['models','intensity_models?select=id,code,name,value_mode,unit_label,is_active,sort_order&order=sort_order.asc'],
+    ['values','intensity_values?select=id,intensity_model_id,code,label,numeric_value,min_value,max_value,color_hex,text_color_hex,is_active,sort_order&order=sort_order.asc'],
+    ['descriptions','block_description_suggestions?select=id,text,is_active,sort_order&order=sort_order.asc']
+  ];
+  const results=await Promise.allSettled(specs.map(([,path])=>api(path)));
+  results.forEach((r,i)=>{
+    const key=specs[i][0];
+    if(r.status==='fulfilled') registries[key]=r.value||[];
+    else { registries[key]=[]; registryErrors.push(key+': '+(r.reason?.message||'okänt fel')); }
+  });
+  if(registryErrors.length) console.warn('Registerfel',registryErrors);
+  return registryErrors.length===0;
 }
 function userTools(){return `<div class="toplinks"><button onclick="showSettings()">⚙ INSTÄLLNINGAR</button><button onclick="showHelp()">? HJÄLP</button>${auth?`<button onclick="signOut()">LOGGA UT</button>`:`<button onclick="login()">LOGGA IN</button>`}</div>`}
-function showSettings(){setBrand('INSTÄLLNINGAR','SPARAS LOKALT PÅ DEN HÄR ENHETEN');setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
+function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setBrand('HJÄLP','FRISKIS TRAINING PLAYER');setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.0.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 function setSync(state,msg){
   const el=document.querySelector('#syncState');
   if(!el)return;
@@ -142,27 +155,39 @@ function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.pa
 function activityName(p){return registries.activities.find(x=>x.id===p.activity_type_id)?.name||'Spinning'}
 function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_id)?.name||'Borg'}
 function list(){
-  stop(); setBrand('MINA PASS','VÄLJ ETT PASS ELLER SKAPA ETT NYTT'); setHomeButton(false);
+  stop(); setAppBrand(); setHomeButton(false);
   app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+(auth.user?.email||'användare'):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div>
   <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${p.name}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span><span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span></div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
   <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${auth?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:''}</div></div>`).join('')}</div>`;
   setSync(online?'ok':'err',online?'Centralt sparat':'Lokalt läge');
 }
-function edit(i){
+async function edit(i){
   if(!auth){login();return}
-  stop(); setBrand('REDIGERA PASS','SKAPA ELLER ÄNDRA ETT PASS'); setHomeButton(true);
-  let borg=registries.models.find(x=>x.code==='borg'), spin=registries.activities.find(x=>x.code==='spinning'); let p=i==null?{id:null,name:'Nytt pass',visibility:'private',owner_id:auth.user.id,activity_type_id:spin?.id||null,intensity_model_id:borg?.id||null,parts:[{id:1,time:'5:00',borg:10,moment:'Uppvärmning',instruction:''}],remote:false}:structuredClone(passes[i]);
+  stop(); setAppBrand(); setHomeButton(true);
+  if(!registries.activities.length || !registries.models.length){
+    await loadRegistries();
+  }
+  if(!registries.activities.length || !registries.models.length){
+    app.innerHTML=`<div class="registry-error"><h1>Register kunde inte laddas</h1><p>Aktivitet och intensitetsmodell måste hämtas från databasen innan passet kan redigeras.</p><p class="muted">${registryErrors.join('<br>')||'Kontrollera databasbehörigheter för registertabellerna.'}</p><div class="actions"><button class="primary" onclick="edit(${i==null?'null':i})">FÖRSÖK IGEN</button><button onclick="list()">MINA PASS</button></div></div>`;
+    return;
+  }
+  let borg=registries.models.find(x=>x.code==='borg'), spin=registries.activities.find(x=>x.code==='spinning');
+  let p=i==null?{id:null,name:'Nytt pass',visibility:'private',owner_id:auth.user.id,activity_type_id:spin?.id||registries.activities[0]?.id||null,intensity_model_id:borg?.id||registries.models[0]?.id||null,parts:[{id:1,time:'5:00',borg:10,moment:'Uppvärmning',instruction:''}],remote:false}:structuredClone(passes[i]);
+  if(!p.activity_type_id) p.activity_type_id=spin?.id||registries.activities[0]?.id||null;
+  if(!p.intensity_model_id) p.intensity_model_id=borg?.id||registries.models[0]?.id||null;
   active={p,i}; drawEdit();
 }
 function drawEdit(){
   let p=active.p; const model=registries.models.find(x=>x.id===p.intensity_model_id); const isBorg=!model||model.code==='borg';
   const suggestions=registries.descriptions.filter(x=>x.is_active!==false).map(x=>`<option value="${String(x.text).replaceAll('"','&quot;')}"></option>`).join('');
-  app.innerHTML=`<div class="editor-head"><div><h1>Skapa / redigera pass</h1><div class="muted">Direktredigera tabellen. Beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
+  const pageTitle=active.i==null?'Skapa nytt pass':'Redigera pass';
+  app.innerHTML=`<div class="editor-head"><div><h1>${pageTitle}</h1><div class="muted">Direktredigera tabellen. Beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
   <input class="name" id="pname" value="${p.name.replaceAll('"','&quot;')}">
   <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div></div>
   <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile')}
   <datalist id="descriptionSuggestions">${suggestions}</datalist>
+  <div class="row row-head"><span>#</span><span>Tid</span><span>Intensitet</span><span>Moment</span><span>Beskrivning</span><span></span></div>
   <div id="rows">${p.parts.map((x,j)=>`<div class="row"><b>${j+1}</b>
   <input value="${x.time}" onchange="chg(${j},'time',this.value)">
   ${isBorg?`<select class="borginput" onchange="chg(${j},'borg',this.value)" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<input value="${x.intensity||''}" placeholder="FTP">`}
