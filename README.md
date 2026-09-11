@@ -1,15 +1,17 @@
-# Friskis Training Player — Prototype 2.3.2
+# Friskis Training Player — Prototype 2.3.3
 
-Finjustering av FTP-presentationen och registervården efter test av 2.3.1.
+Fryst scope för 2.3.3:
 
-Ändrat:
-- zonnamn i körvyn skalas ned automatiskt när texten är lång, så t.ex. "Mycket lätt" ryms
-- FTP-intervallet visas som t.ex. `56–75 %` i stället för `56–75 % FTP`
-- procentintervallet är större och tydligare för deltagarna
-- mer luft mellan intensitetsinformationen och tiden i panelen "Nästa"
-- knappen `Värden` markeras tydligt för den intensitetsmodell vars värden visas
-- Moment/Beskrivning-comboboxen från 2.3.1 är kvar
-- dynamiska FTP-zoner är oförändrade och fortsätter fungera med nya zoner
+- Infoga block mellan befintliga block i passeditorn.
+- Drag & drop för blockordning via draghandtaget `⋮⋮`.
+  - mus/trackpad via vanlig drag & drop
+  - touch/pointer-stöd för iPad/mobil via draghandtaget
+- Panelen `Nästa` visar inte längre nästa blocks beskrivning/instruktion.
+- Lokalt sparade pass fasas ut:
+  - nya pass sparas inte längre som separata lokala pass om central lagring misslyckas
+  - äldre lokala pass som hittas erbjuds att flyttas till `Mina Pass`
+  - import sker som `Privat`
+  - den inbyggda korta demon markeras som Demo och behandlas inte som ett lokalt användarpass
 
 Ingen SQL.
 Ingen Edge Function.

@@ -195,7 +195,7 @@ main{padding-top:24px;padding-bottom:76px}
 @media(max-width:800px){main{padding-top:16px}.editor{padding:14px}.profile{height:110px}}
 
 .rowtools{display:flex;gap:4px}.iconbtn{min-width:42px;padding:10px 12px;font-size:18px;line-height:1}.iconbtn.small{min-width:0;width:34px;height:34px;padding:0}.iconbtn.danger:hover{border-color:#ef1738;color:#ff6b7f}.userbtn{font-size:12px;font-weight:600}.prestart-number.pulse{animation:prePulse .8s ease-in-out infinite alternate}@keyframes prePulse{from{transform:scale(1)}to{transform:scale(1.06)}}
-.editor .row{grid-template-columns:38px 95px 95px minmax(150px,1fr) minmax(220px,1.5fr) 76px}
+.editor .row{grid-template-columns:38px 95px 95px minmax(150px,1fr) minmax(220px,1.5fr) 114px}
 
 
 /* Prototype 2.0.3 – compact editor + sticky actions */
@@ -336,4 +336,65 @@ main{padding-top:24px;padding-bottom:76px}
   .ring-range{font-size:21px}
   .current-range{font-size:26px}
   .dash-next .next-range{font-size:24px}
+}
+
+
+/* Prototype 2.3.3 – block insertion, drag & drop, local-pass migration */
+.insert-block{
+  height:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  margin:-2px 0;
+}
+.insert-block:before{
+  content:"";
+  position:absolute;
+  left:38px;right:122px;top:50%;
+  height:1px;background:#263038;
+}
+.insert-block button{
+  position:relative;
+  z-index:1;
+  opacity:.22;
+  border:1px solid #3a454c;
+  background:#11171a;
+  color:#c8d0d5;
+  border-radius:999px;
+  padding:2px 10px;
+  min-height:24px;
+  font-size:11px;
+  cursor:pointer;
+}
+.insert-block:hover{height:30px}
+.insert-block:hover button,.insert-block button:focus{opacity:1;border-color:#E31836;color:#fff}
+.drag-handle{
+  cursor:grab;
+  letter-spacing:-4px;
+  font-weight:900;
+  color:#9fa9af;
+  touch-action:none;
+  user-select:none;
+}
+.drag-handle:active{cursor:grabbing}
+.editor-block.dragging{opacity:.38}
+.editor-block.drop-before{box-shadow:0 -3px 0 #E31836}
+.editor-block.drop-after{box-shadow:0 3px 0 #E31836}
+.legacy-banner{
+  margin:0 0 18px;
+  padding:13px 16px;
+  border:1px solid #745f25;
+  background:#2a2414;
+  color:#f2dfa3;
+  border-radius:12px;
+}
+.pass-storage.legacy i{
+  background:#f3b43f;
+  box-shadow:0 0 8px #f3b43f66;
+}
+@media(max-width:800px){
+  .insert-block{height:26px}
+  .insert-block button{opacity:.75}
+  .insert-block:before{left:30px;right:110px}
 }

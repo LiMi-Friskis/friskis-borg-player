@@ -37,8 +37,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.2'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.2')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.3'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.3')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -177,7 +177,7 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.2</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.3</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -453,8 +453,9 @@ function setSync(state,msg){
 }
 async function loadPasses(){
   const cached=loadCache();
-  passes=cached.length?cached:[shortDemo];
-  if(!passes.some(p=>p.id==='demo-short')) passes.push(shortDemo);
+  const legacyLocal=cached.filter(p=>!p.remote && p.id!=='demo-short' && !p.builtIn).map(p=>({...p,legacyLocal:true,visibility:'private'}));
+  passes=cached.length?cached:[{...shortDemo,builtIn:true}];
+  if(!passes.some(p=>p.id==='demo-short')) passes.push({...shortDemo,builtIn:true});
   list();
   setSync('work','Synkar...');
   try{
@@ -468,24 +469,23 @@ async function loadPasses(){
       remote:true
     }));
 
-    // Keep the 8-minute demo as a local-only pass, but use Supabase
-    // as source of truth for all centrally stored passes.
-    passes=[...remotePasses, shortDemo];
+    // Centralt lagrade pass är normalläget. Gamla lokala pass behålls endast
+    // tills användaren hunnit importera dem som privata.
+    passes=[...remotePasses,...legacyLocal,{...shortDemo,builtIn:true}];
 
     cache();
     list();
     setSync('ok','Centralt sparat');
   }catch(e){
     online=false;
-    if(!passes.some(p=>p.id==='demo-short')) passes.push(shortDemo);
-    cache();
+    if(!passes.some(p=>p.id==='demo-short')) passes.push({...shortDemo,builtIn:true});
     list();
-    setSync('err','Lokalt läge');
+    setSync('err','Offline · visar senast synkade pass');
     console.error(e);
   }
 }
 async function upsertPass(p,isNew){
-  if(!online){cache();return p}
+  if(!online)throw new Error('Ingen anslutning. Passet kan inte sparas förrän Training Player är online.')
   const body={name:p.name,parts:p.parts,updated_at:new Date().toISOString(),visibility:p.visibility||'public',activity_type_id:p.activity_type_id||null,intensity_model_id:p.intensity_model_id||null}; if(auth?.user?.id)body.owner_id=p.owner_id||auth.user.id;
   if(isNew || !p.remote){
     const rows=await api('passes?select=id,name,parts,updated_at,owner_id,visibility,activity_type_id,intensity_model_id',{
@@ -553,13 +553,16 @@ function activityName(p){return registries.activities.find(x=>x.id===p.activity_
 function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_id)?.name||'Borg'}
 function list(){
   stop(); setAppBrand(); setHomeButton(false);
+  const legacyCount=passes.filter(p=>p.legacyLocal).length;
   app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div>
-  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${escAttr(p.name)}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span><span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span>${auth&&p.remote?`<span class="badge ownerbadge">👤 ${escAttr(ownerName(p))}</span>`:''}</div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div><div class="pass-storage ${p.remote?'remote':''}"><i></i>${p.remote?'Centralt sparat':'Endast lokalt'}</div>${bars(p)}
-  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&p.remote?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
-  setSync(online?'ok':'err',online?'Centralt sparat':'Lokalt läge');
+  ${legacyCount?`<div class="legacy-banner"><b>${legacyCount} äldre lokalt ${legacyCount===1?'pass':'sparade pass'} hittades.</b> Flytta ${legacyCount===1?'det':'dem'} till Mina Pass så sparas ${legacyCount===1?'det':'de'} centralt som Privat.</div>`:''}
+  <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${escAttr(p.name)}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span>${p.builtIn?`<span class="badge">Demo</span>`:`<span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span>`}${auth&&p.remote?`<span class="badge ownerbadge">👤 ${escAttr(ownerName(p))}</span>`:''}</div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div>${p.legacyLocal?`<div class="pass-storage legacy"><i></i>Äldre lokalt pass · flytta till Mina Pass</div>`:p.remote?`<div class="pass-storage remote"><i></i>Centralt sparat</div>`:''}${bars(p)}
+  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${p.legacyLocal?`${auth?`<button onclick="importLocalPass(${i})">SPARA SOM PRIVAT</button>`:`<button onclick="login()">LOGGA IN FÖR ATT SPARA</button>`}`:auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&(p.remote||p.builtIn)?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
+  setSync(online?'ok':'err',online?'Centralt sparat':'Offline · visar senast synkade pass');
 }
 async function edit(i){
   if(!auth){login();return}
+  if(i!=null && passes[i]?.legacyLocal){alert('Flytta först det äldre lokala passet till Mina Pass som Privat.');return}
   if(i!=null && !canEditPass(passes[i])){alert('Du kan bara redigera pass som du äger. Super User kan redigera alla pass.');return}
   stop(); setAppBrand(); setHomeButton(true);
   if(!registries.activities.length || !registries.models.length){
@@ -585,12 +588,12 @@ function drawEdit(focus=null){
   <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile editor-profile')}
   <div class="row row-head"><span>#</span><span>Tid</span><span>Intensitet</span><span>Moment</span><span>Beskrivning</span><span></span></div>
-  <div id="rows">${p.parts.map((x,j)=>`<div class="row" data-row="${j}"><b>${j+1}</b>
+  <div id="rows">${p.parts.map((x,j)=>`${j>0?`<div class="insert-block"><button type="button" onclick="insertPartAt(${j})">＋ Infoga block</button></div>`:''}<div class="row editor-block" data-row="${j}" ondragover="blockDragOver(event,${j})" ondragleave="blockDragLeave(event)" ondrop="blockDrop(event,${j})"><b>${j+1}</b>
   <input data-field="time" value="${escAttr(x.time)}" oninput="setPart(${j},'time',this.value)" onkeydown="editorKey(event,${j},'time')">
   ${isBorg?`<select data-field="borg" class="borginput" onchange="setPart(${j},'borg',this.value);this.style.background=color(this.value);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<select data-field="borg" class="borginput" onchange="setPart(${j},'intensity',this.value);this.style.background=intensityColor(active.p,active.p.parts[${j}]);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${intensityColor(p,x)}">${intensityValues(p).map(v=>`<option value="${escAttr(v.code)}" ${v.code===(x.intensity||intensityValues(p)[0]?.code)?'selected':''}>${escAttr(v.label)}${v.min_value!=null||v.max_value!=null?' · '+(v.min_value==null?'≤'+v.max_value:v.max_value==null?'>'+v.min_value:v.min_value+'–'+v.max_value)+' '+escAttr(model?.unit_label||''):''}</option>`).join('')}</select>`}
   ${comboField('moment',j,x.moment,'Moment','moments')}
   ${comboField('instruction',j,x.instruction,'Beskrivning','descriptions','instruction')}
-  <div class="rowtools"><button class="iconbtn small" title="Duplicera block" onclick="duplicatePart(${j})">⧉</button><button class="iconbtn small danger" title="Ta bort block" onclick="removePart(${j})">×</button></div></div>`).join('')}</div>
+  <div class="rowtools"><button type="button" class="iconbtn small drag-handle" title="Dra för att flytta block" aria-label="Dra för att flytta block" draggable="true" ondragstart="blockDragStart(event,${j})" ondragend="blockDragEnd(event)" onpointerdown="blockPointerStart(event,${j})" onpointermove="blockPointerMove(event)" onpointerup="blockPointerEnd(event)" onpointercancel="blockPointerCancel(event)">⋮⋮</button><button class="iconbtn small" title="Duplicera block" onclick="duplicatePart(${j})">⧉</button><button class="iconbtn small danger" title="Ta bort block" onclick="removePart(${j})">×</button></div></div>`).join('')}</div>
   <div class="editor-actions-sticky"><div class="editor-total"><b>Total tid: <span id="editorTotal">${fmt(total(p))}</span></b></div><div class="actions editor-actions"><button onclick="addPart(null,true)">+ LÄGG TILL BLOCK</button><button onclick="preview()">▶ PROVKÖR</button><button class="primary" onclick="saveEdit()">SPARA PASS</button></div></div></div>`;
   if(focus) requestAnimationFrame(()=>focusEditor(focus.row,focus.field));
 }
@@ -616,6 +619,74 @@ function focusEditor(row,field='time'){const el=document.querySelector(`.row[dat
 function addPart(after=null,focus=false){const first=intensityValues(active.p)[0];const part={id:Date.now()+Math.random(),time:'2:00',borg:12,intensity:first?.code||'',moment:'',instruction:''};if(after==null)active.p.parts.push(part);else active.p.parts.splice(after+1,0,part);drawEdit(focus?{row:after==null?active.p.parts.length-1:after+1,field:'time'}:null)}
 function duplicatePart(i){const c=structuredClone(active.p.parts[i]);c.id=Date.now()+Math.random();active.p.parts.splice(i+1,0,c);drawEdit({row:i+1,field:'time'})}
 function removePart(i){if(active.p.parts.length>1){active.p.parts.splice(i,1);drawEdit({row:Math.min(i,active.p.parts.length-1),field:'time'})}}
+function insertPartAt(index){
+  const first=intensityValues(active.p)[0];
+  const part={id:Date.now()+Math.random(),time:'2:00',borg:12,intensity:first?.code||'',moment:'',instruction:''};
+  active.p.parts.splice(index,0,part);
+  drawEdit({row:index,field:'time'});
+}
+let blockDragIndex=null,blockDropSlot=null,blockPointerState=null;
+function clearBlockDropMarks(){document.querySelectorAll('.editor-block').forEach(r=>r.classList.remove('drop-before','drop-after','dragging'))}
+function dropSlotForEvent(e,rowIndex){
+  const row=e.target.closest('.editor-block')||document.querySelector(`.editor-block[data-row="${rowIndex}"]`);
+  if(!row)return rowIndex;
+  const rect=row.getBoundingClientRect();
+  return rowIndex+(e.clientY>rect.top+rect.height/2?1:0);
+}
+function markDropSlot(slot){
+  document.querySelectorAll('.editor-block').forEach(r=>r.classList.remove('drop-before','drop-after'));
+  const n=active.p.parts.length;
+  if(slot<=0){document.querySelector('.editor-block[data-row="0"]')?.classList.add('drop-before');return}
+  if(slot>=n){document.querySelector(`.editor-block[data-row="${n-1}"]`)?.classList.add('drop-after');return}
+  document.querySelector(`.editor-block[data-row="${slot}"]`)?.classList.add('drop-before');
+}
+function movePartToSlot(from,slot){
+  if(from==null||slot==null)return;
+  let target=slot;
+  if(from<target)target--;
+  if(target===from||target<0||target>=active.p.parts.length)return;
+  const [part]=active.p.parts.splice(from,1);
+  active.p.parts.splice(target,0,part);
+  drawEdit();
+}
+function blockDragStart(e,i){
+  blockDragIndex=i;blockDropSlot=i;
+  e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));
+  requestAnimationFrame(()=>document.querySelector(`.editor-block[data-row="${i}"]`)?.classList.add('dragging'));
+}
+function blockDragOver(e,i){
+  if(blockDragIndex==null)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  blockDropSlot=dropSlotForEvent(e,i);markDropSlot(blockDropSlot);
+}
+function blockDragLeave(e){}
+function blockDrop(e,i){
+  e.preventDefault();
+  const slot=blockDropSlot??dropSlotForEvent(e,i),from=blockDragIndex;
+  blockDragIndex=null;blockDropSlot=null;clearBlockDropMarks();movePartToSlot(from,slot);
+}
+function blockDragEnd(e){blockDragIndex=null;blockDropSlot=null;clearBlockDropMarks()}
+function blockPointerStart(e,i){
+  if(e.pointerType==='mouse')return;
+  e.preventDefault();blockPointerState={from:i,slot:i,pointerId:e.pointerId};
+  try{e.currentTarget.setPointerCapture(e.pointerId)}catch{}
+  document.querySelector(`.editor-block[data-row="${i}"]`)?.classList.add('dragging');
+}
+function blockPointerMove(e){
+  if(!blockPointerState||e.pointerId!==blockPointerState.pointerId)return;
+  e.preventDefault();
+  const el=document.elementFromPoint(e.clientX,e.clientY),row=el?.closest?.('.editor-block');
+  if(!row)return;
+  const i=+row.dataset.row,rect=row.getBoundingClientRect();
+  blockPointerState.slot=i+(e.clientY>rect.top+rect.height/2?1:0);
+  markDropSlot(blockPointerState.slot);
+}
+function blockPointerEnd(e){
+  if(!blockPointerState||e.pointerId!==blockPointerState.pointerId)return;
+  const {from,slot}=blockPointerState;blockPointerState=null;clearBlockDropMarks();movePartToSlot(from,slot);
+}
+function blockPointerCancel(e){blockPointerState=null;clearBlockDropMarks()}
+
 function editorKey(e,row,field){
   const order=['time','borg','moment','instruction']; const idx=order.indexOf(field);
   if(e.key==='Enter'){
@@ -630,19 +701,44 @@ async function saveEdit(){
   try{
     const saved=await upsertPass(active.p,active.i==null);
     if(active.i==null)passes.unshift(saved);else passes[active.i]=saved;
-    cache(); list(); setSync(online?'ok':'err',online?'Centralt sparat':'Sparat lokalt');
+    cache(); list(); setSync('ok','Centralt sparat');
   }catch(e){
     online=false;
-    if(active.i==null)passes.unshift(active.p);else passes[active.i]=active.p;
-    cache(); list(); setSync('err','Sparat lokalt');
     console.error(e);
+    alert('Passet kunde inte sparas centralt. Dina ändringar finns kvar i editorn – försök igen när anslutningen är tillbaka.');
+    drawEdit();
   }
 }
 function preview(){active.p.name=document.querySelector('#pname').value||active.p.name;startPlayer(active.p)}
 async function duplicate(i){
-  const p=structuredClone(passes[i]); p.id=null; p.remote=false; p.owner_id=auth?.user?.id||null; p.visibility='private'; p.name+=' – kopia';
-  try{const saved=await upsertPass(p,true);passes.unshift(saved)}catch(e){online=false;passes.unshift(p)}
-  cache(); list();
+  const p=structuredClone(passes[i]); p.id=null; p.remote=false; p.legacyLocal=false; p.builtIn=false; p.owner_id=auth?.user?.id||null; p.visibility='private'; p.name+=' – kopia';
+  try{
+    const saved=await upsertPass(p,true);
+    passes.unshift(saved);cache();list();
+  }catch(e){
+    online=false;console.error(e);
+    alert('Kopian kunde inte sparas centralt. Försök igen när anslutningen är tillbaka.');
+  }
+}
+async function importLocalPass(i){
+  if(!auth){login();return}
+  if(!online){alert('Training Player måste vara online för att flytta passet till Mina Pass.');return}
+  const old=passes[i];
+  if(!old?.legacyLocal)return;
+  let borg=registries.models.find(x=>x.code==='borg'),spin=registries.activities.find(x=>x.code==='spinning');
+  const p=structuredClone(old);
+  p.id=null;p.remote=false;p.legacyLocal=false;p.builtIn=false;
+  p.owner_id=auth.user.id;p.visibility='private';
+  p.activity_type_id=p.activity_type_id||spin?.id||registries.activities[0]?.id||null;
+  p.intensity_model_id=p.intensity_model_id||borg?.id||registries.models[0]?.id||null;
+  try{
+    const saved=await upsertPass(p,true);
+    passes.splice(i,1,saved);
+    cache();list();
+    alert('Passet är nu sparat som Privat i Mina Pass.');
+  }catch(e){
+    console.error(e);alert('Passet kunde inte flyttas till Mina Pass: '+e.message);
+  }
 }
 async function del(i){
   if(!confirm('Radera passet?'))return;
@@ -771,7 +867,6 @@ function drawLive(){
             <div class="borg">${intensityHeading(p)} <span class="${zoneTextClass(p,n)}" style="color:${intensityColor(p,n)}">${intensityShort(p,n)}</span></div>
             ${intensityRange(p,n)?`<div class="intensity-range next-range">${intensityRange(p,n)}</div>`:''}
             <div class="time">${n.time}</div>
-            <div class="muted">${n.instruction||''}</div>
           `:'<div class="moment">MÅL 🎉</div>'}
         </section>
       </div>
