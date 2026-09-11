@@ -37,8 +37,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.3'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.3')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.4'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.4')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -51,10 +51,53 @@ function headers(extra={}) {
     ...extra
   };
 }
-async function api(path,opts={}) {
+let refreshSessionPromise=null;
+function jwtExpiryMs(token){
+  try{
+    const payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return payload.exp?payload.exp*1000:0;
+  }catch{return 0}
+}
+function sessionNeedsRefresh(){
+  if(!auth?.access_token||!auth?.refresh_token)return false;
+  const exp=jwtExpiryMs(auth.access_token);
+  return !!exp && exp-Date.now()<60000;
+}
+async function refreshAuthSession(){
+  if(!auth?.refresh_token)throw new Error('Din session har gått ut. Logga in igen för att fortsätta.');
+  if(refreshSessionPromise)return refreshSessionPromise;
+  refreshSessionPromise=(async()=>{
+    try{
+      const fresh=await authFetch('token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:auth.refresh_token})});
+      if(!fresh?.access_token)throw new Error('Kunde inte förnya sessionen');
+      auth={...auth,...fresh,user:fresh.user||auth.user};
+      localStorage.setItem(AUTH_KEY,JSON.stringify(auth));
+      return auth;
+    }catch(e){
+      auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);
+      throw new Error('Din session har gått ut. Logga in igen för att fortsätta.');
+    }finally{
+      refreshSessionPromise=null;
+    }
+  })();
+  return refreshSessionPromise;
+}
+async function api(path,opts={},retry=true) {
+  if(auth && sessionNeedsRefresh())await refreshAuthSession();
   const res=await fetch(SUPABASE_URL+'/rest/v1/'+path,{...opts,headers:headers(opts.headers||{})});
-  if(!res.ok){throw new Error((await res.text())||('HTTP '+res.status))}
   const text=await res.text();
+  const expired=res.status===401 || /JWT expired|PGRST303/i.test(text);
+  if(!res.ok && expired && retry && auth?.refresh_token){
+    await refreshAuthSession();
+    return api(path,opts,false);
+  }
+  if(!res.ok){
+    if(expired){
+      auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);
+      throw new Error('Din session har gått ut. Logga in igen för att fortsätta.');
+    }
+    throw new Error(text||('HTTP '+res.status));
+  }
   return text?JSON.parse(text):null;
 }
 async function authFetch(path,opts={}){
@@ -177,7 +220,7 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.3</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.4</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -931,4 +974,4 @@ function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+se
 function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
 
 homeBtn.onclick=goHome;
-(async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth){await markOwnProfileActive();await loadProfiles();if(currentProfile&&!currentProfile.is_active){auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);alert('Ditt konto är inaktiverat. Kontakta en administratör.');login();return}}await loadRegistries();await loadPasses();checkResume()})();
+(async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth){try{if(sessionNeedsRefresh())await refreshAuthSession()}catch(e){alert(e.message);login();return}await markOwnProfileActive();await loadProfiles();if(currentProfile&&!currentProfile.is_active){auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);alert('Ditt konto är inaktiverat. Kontakta en administratör.');login();return}}await loadRegistries();await loadPasses();checkResume()})();

@@ -1,17 +1,11 @@
-# Friskis Training Player — Prototype 2.3.3
+# Friskis Training Player — Prototype 2.3.4
 
-Fryst scope för 2.3.3:
+Hotfix för utgångna inloggningssessioner.
 
-- Infoga block mellan befintliga block i passeditorn.
-- Drag & drop för blockordning via draghandtaget `⋮⋮`.
-  - mus/trackpad via vanlig drag & drop
-  - touch/pointer-stöd för iPad/mobil via draghandtaget
-- Panelen `Nästa` visar inte längre nästa blocks beskrivning/instruktion.
-- Lokalt sparade pass fasas ut:
-  - nya pass sparas inte längre som separata lokala pass om central lagring misslyckas
-  - äldre lokala pass som hittas erbjuds att flyttas till `Mina Pass`
-  - import sker som `Privat`
-  - den inbyggda korta demon markeras som Demo och behandlas inte som ett lokalt användarpass
+- access token förnyas automatiskt med Supabase refresh token innan den går ut
+- om PostgREST ändå svarar med `JWT expired` / `PGRST303` förnyas sessionen och anropet görs om en gång
+- om sessionen inte längre kan förnyas visas ett begripligt meddelande om att logga in igen, i stället för rått JWT-fel
+- övrig funktionalitet från 2.3.3 är oförändrad
 
 Ingen SQL.
 Ingen Edge Function.
