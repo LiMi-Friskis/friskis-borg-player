@@ -37,8 +37,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.2.5'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.2.5')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.0')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -152,7 +152,7 @@ async function loadRegistries(){
   const specs=[
     ['activities','activity_types?select=id,code,name,is_active,sort_order&order=sort_order.asc'],
     ['models','intensity_models?select=id,code,name,value_mode,unit_label,is_active,sort_order&order=sort_order.asc'],
-    ['values','intensity_values?select=id,intensity_model_id,code,label,numeric_value,min_value,max_value,color_hex,text_color_hex,is_active,sort_order&order=sort_order.asc'],
+    ['values','intensity_values?select=id,intensity_model_id,code,label,numeric_value,min_value,max_value,color_hex,text_color_hex,description,is_active,sort_order&order=sort_order.asc'],
     ['descriptions','block_description_suggestions?select=id,text,is_active,sort_order&order=sort_order.asc'],
     ['moments','block_moment_suggestions?select=id,text,is_active,sort_order&order=sort_order.asc']
   ];
@@ -177,7 +177,7 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.2.5</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -321,7 +321,7 @@ function renderModelsRegister(){
   const rows=[...registries.models].sort(regSort);
   if(!activeIntensityModelId || !rows.some(r=>r.id===activeIntensityModelId)) activeIntensityModelId=rows[0]?.id||null;
   return `<div class="adminbox register-box">
-    <div class="register-head"><div><h2>Intensitetsmodeller</h2><div class="muted">Borg finns redan. FTP kan aktiveras när zonerna är fastställda.</div></div><button class="primary smallbtn" onclick="addRegisterRow('models')">+ NY MODELL</button></div>
+    <div class="register-head"><div><h2>Intensitetsmodeller</h2><div class="muted">Borg använder exakta nivåer. FTP använder zoner/intervall i % FTP.</div></div><button class="primary smallbtn" onclick="addRegisterRow('models')">+ NY MODELL</button></div>
     <div class="user-admin-scroll"><table class="admin-table register-table"><thead><tr><th>Namn</th><th>Kod</th><th>Typ</th><th>Enhet</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr data-reg-kind="models" data-id="${r.id}">
       <td><input data-f="name" value="${escAttr(r.name||'')}"></td>
@@ -340,15 +340,17 @@ function renderModelsRegister(){
 function renderIntensityValues(modelId){
   const model=registries.models.find(m=>m.id===modelId);
   const rows=registries.values.filter(v=>v.intensity_model_id===modelId).sort(regSort);
+  const zoned=model?.value_mode==='zone'||model?.value_mode==='range';
+  const unit=model?.unit_label||'';
   return `<div class="intensity-values">
-    <div class="register-head"><div><h3>Värden – ${escAttr(model?.name||'')}</h3><div class="muted">Färg används i passprofil och spelare.</div></div><button class="smallbtn" onclick="addIntensityValue('${modelId}')">+ NYTT VÄRDE</button></div>
-    <div class="user-admin-scroll"><table class="admin-table register-table values-table"><thead><tr><th>Etikett</th><th>Kod</th><th>Värde</th><th>Min</th><th>Max</th><th>Färg</th><th>Text</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
+    <div class="register-head"><div><h3>Värden – ${escAttr(model?.name||'')}</h3><div class="muted">${zoned?`Zon/intervall anges med Från och Till${unit?' i '+escAttr(unit):''}.`:'Exakta nivåer anges i Värde.'} Färgerna är endast presentation.</div></div><button class="smallbtn" onclick="addIntensityValue('${modelId}')">+ NYTT VÄRDE</button></div>
+    ${model?.code==='ftp'?`<div class="muted" style="margin:0 0 10px"><b>Förslag:</b> FTP-zonerna är ett diskussionsunderlag och kan ändras av Admin/Super User när Friskis har fastställt nivåerna.</div>`:''}
+    <div class="user-admin-scroll"><table class="admin-table register-table values-table"><thead><tr><th>Etikett</th><th>Kod</th>${zoned?`<th>Från ${escAttr(unit)}</th><th>Till ${escAttr(unit)}</th>`:'<th>Värde</th>'}<th>Beskrivning</th><th>Färg</th><th>Text</th><th>Ordning</th><th>Status</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr data-reg-kind="values" data-id="${r.id}">
       <td><input data-f="label" value="${escAttr(r.label||'')}"></td>
       <td><input data-f="code" value="${escAttr(r.code||'')}"></td>
-      <td><input data-f="numeric_value" type="number" step="0.1" value="${r.numeric_value??''}"></td>
-      <td><input data-f="min_value" type="number" step="0.1" value="${r.min_value??''}"></td>
-      <td><input data-f="max_value" type="number" step="0.1" value="${r.max_value??''}"></td>
+      ${zoned?`<td><input data-f="min_value" type="number" step="0.1" value="${r.min_value??''}" placeholder="Ingen"></td><td><input data-f="max_value" type="number" step="0.1" value="${r.max_value??''}" placeholder="Ingen"></td>`:`<td><input data-f="numeric_value" type="number" step="0.1" value="${r.numeric_value??''}"></td>`}
+      <td><input data-f="description" value="${escAttr(r.description||'')}"></td>
       <td><input data-f="color_hex" class="color-text" value="${escAttr(r.color_hex||'#888888')}"><input data-color-for="color_hex" type="color" value="${escAttr(r.color_hex||'#888888')}" oninput="this.previousElementSibling.value=this.value"></td>
       <td><input data-f="text_color_hex" class="color-text" value="${escAttr(r.text_color_hex||'#ffffff')}"><input data-color-for="text_color_hex" type="color" value="${escAttr(r.text_color_hex||'#ffffff')}" oninput="this.previousElementSibling.value=this.value"></td>
       <td><input data-f="sort_order" type="number" value="${+r.sort_order||0}"></td>
@@ -379,7 +381,7 @@ function registerFields(kind){
   return {
     activities:['name','code','sort_order'],
     models:['name','code','value_mode','unit_label','sort_order'],
-    values:['label','code','numeric_value','min_value','max_value','color_hex','text_color_hex','sort_order'],
+    values:['label','code','numeric_value','min_value','max_value','description','color_hex','text_color_hex','sort_order'],
     moments:['text','sort_order'],
     descriptions:['text','sort_order']
   }[kind]||[];
@@ -506,7 +508,30 @@ async function deleteRemote(p){
   await api('passes?id=eq.'+encodeURIComponent(p.id),{method:'DELETE'});
 }
 
-function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/T*100}%;height:${Math.max(15,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}</div>`}
+function intensityModel(p){return registries.models.find(x=>x.id===p.intensity_model_id)}
+function intensityValues(p){return registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).sort(regSort)}
+function intensityValue(p,part){
+  const model=intensityModel(p);
+  if(!model||model.code==='borg') return intensityValues(p).find(v=>+v.numeric_value===+part.borg)||null;
+  const vals=intensityValues(p);
+  return vals.find(v=>v.code===part.intensity||v.id===part.intensity||v.label===part.intensity)||vals[0]||null;
+}
+function intensityLabel(p,part){
+  const model=intensityModel(p);
+  if(!model||model.code==='borg')return String(part.borg??'');
+  const v=intensityValue(p,part); if(!v)return part.intensity||'—';
+  const unit=model.unit_label||'';
+  let range='';
+  if(v.min_value!=null&&v.max_value!=null)range=`${v.min_value}–${v.max_value} ${unit}`;
+  else if(v.max_value!=null)range=`≤${v.max_value} ${unit}`;
+  else if(v.min_value!=null)range=`>${v.min_value} ${unit}`;
+  return `${v.label}${range?' · '+range:''}`;
+}
+function intensityShort(p,part){const m=intensityModel(p);return (!m||m.code==='borg')?String(part.borg??''):intensityValue(p,part)?.label||part.intensity||'—'}
+function intensityColor(p,part){const m=intensityModel(p);if(!m||m.code==='borg')return color(part.borg);return intensityValue(p,part)?.color_hex||'#888888'}
+function intensityHeight(p,part){const m=intensityModel(p);if(!m||m.code==='borg')return Math.max(15,(part.borg-6)/14*100);const vals=intensityValues(p),v=intensityValue(p,part),i=Math.max(0,vals.findIndex(x=>x.id===v?.id));return vals.length?Math.max(20,((i+1)/vals.length)*100):50}
+function intensityHeading(p){const m=intensityModel(p);return (!m||m.code==='borg')?'BORG':(m.name||'INTENSITET').toUpperCase()}
+function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.parts.map(x=>`<div class="bar" title="${escAttr(intensityLabel(p,x))}" style="width:${sec(x.time)/T*100}%;height:${intensityHeight(p,x)}%;background:${intensityColor(p,x)}"></div>`).join('')}</div>`}
 
 function activityName(p){return registries.activities.find(x=>x.id===p.activity_type_id)?.name||'Spinning'}
 function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_id)?.name||'Borg'}
@@ -542,14 +567,14 @@ function drawEdit(focus=null){
   const pageTitle=active.i==null?'Skapa nytt pass':'Redigera pass';
   app.innerHTML=`<div class="editor-head"><div><h1>${pageTitle}</h1><div class="muted">Direktredigera tabellen. Moment och beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
   <input class="name" id="pname" value="${escAttr(p.name)}" oninput="active.p.name=this.value">
-  <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div>${isSuper()?`<div class="field owner-field"><label>Ägare</label><select onchange="active.p.owner_id=this.value">${profiles.filter(x=>x.is_active!==false).map(x=>`<option value="${x.user_id}" ${x.user_id===p.owner_id?'selected':''}>${escAttr(x.display_name||'Användare')} · ${roleLabel(x.role)}</option>`).join('')}</select></div>`:`<div class="field owner-field"><label>Ägare</label><div class="readonly-field">${escAttr(ownerName(p))}</div></div>`}</div>
+  <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;const v=intensityValues(active.p)[0];if(v)active.p.parts.forEach(x=>x.intensity=v.code);drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div>${isSuper()?`<div class="field owner-field"><label>Ägare</label><select onchange="active.p.owner_id=this.value">${profiles.filter(x=>x.is_active!==false).map(x=>`<option value="${x.user_id}" ${x.user_id===p.owner_id?'selected':''}>${escAttr(x.display_name||'Användare')} · ${roleLabel(x.role)}</option>`).join('')}</select></div>`:`<div class="field owner-field"><label>Ägare</label><div class="readonly-field">${escAttr(ownerName(p))}</div></div>`}</div>
   <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile editor-profile')}
   <datalist id="momentSuggestions">${moments}</datalist><datalist id="descriptionSuggestions">${descriptions}</datalist>
   <div class="row row-head"><span>#</span><span>Tid</span><span>Intensitet</span><span>Moment</span><span>Beskrivning</span><span></span></div>
   <div id="rows">${p.parts.map((x,j)=>`<div class="row" data-row="${j}"><b>${j+1}</b>
   <input data-field="time" value="${escAttr(x.time)}" oninput="setPart(${j},'time',this.value)" onkeydown="editorKey(event,${j},'time')">
-  ${isBorg?`<select data-field="borg" class="borginput" onchange="setPart(${j},'borg',this.value);this.style.background=color(this.value);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<input data-field="borg" value="${escAttr(x.intensity||'')}" placeholder="FTP" oninput="setPart(${j},'intensity',this.value)" onkeydown="editorKey(event,${j},'borg')">`}
+  ${isBorg?`<select data-field="borg" class="borginput" onchange="setPart(${j},'borg',this.value);this.style.background=color(this.value);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<select data-field="borg" class="borginput" onchange="setPart(${j},'intensity',this.value);this.style.background=intensityColor(active.p,active.p.parts[${j}]);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${intensityColor(p,x)}">${intensityValues(p).map(v=>`<option value="${escAttr(v.code)}" ${v.code===(x.intensity||intensityValues(p)[0]?.code)?'selected':''}>${escAttr(v.label)}${v.min_value!=null||v.max_value!=null?' · '+(v.min_value==null?'≤'+v.max_value:v.max_value==null?'>'+v.min_value:v.min_value+'–'+v.max_value)+' '+escAttr(model?.unit_label||''):''}</option>`).join('')}</select>`}
   <input data-field="moment" list="momentSuggestions" value="${escAttr(x.moment)}" placeholder="Moment" oninput="setPart(${j},'moment',this.value)" onkeydown="editorKey(event,${j},'moment')">
   <input data-field="instruction" class="instruction" list="descriptionSuggestions" value="${escAttr(x.instruction)}" placeholder="Beskrivning" oninput="setPart(${j},'instruction',this.value)" onkeydown="editorKey(event,${j},'instruction')">
   <div class="rowtools"><button class="iconbtn small" title="Duplicera block" onclick="duplicatePart(${j})">⧉</button><button class="iconbtn small danger" title="Ta bort block" onclick="removePart(${j})">×</button></div></div>`).join('')}</div>
@@ -559,7 +584,7 @@ function drawEdit(focus=null){
 function setPart(i,k,v){active.p.parts[i][k]=k==='borg'?Math.max(6,Math.min(20,+v)):v; const t=document.querySelector('#editorTotal');if(t)t.textContent=fmt(total(active.p));if(k==='time')refreshProfile()}
 function refreshProfile(){const el=document.querySelector('.editor-profile');if(el)el.outerHTML=bars(active.p,'profile editor-profile')}
 function focusEditor(row,field='time'){const el=document.querySelector(`.row[data-row="${row}"] [data-field="${field}"]`);if(el){el.focus();if(el.select)el.select()}}
-function addPart(after=null,focus=false){const part={id:Date.now()+Math.random(),time:'2:00',borg:12,moment:'',instruction:''};if(after==null)active.p.parts.push(part);else active.p.parts.splice(after+1,0,part);drawEdit(focus?{row:after==null?active.p.parts.length-1:after+1,field:'time'}:null)}
+function addPart(after=null,focus=false){const first=intensityValues(active.p)[0];const part={id:Date.now()+Math.random(),time:'2:00',borg:12,intensity:first?.code||'',moment:'',instruction:''};if(after==null)active.p.parts.push(part);else active.p.parts.splice(after+1,0,part);drawEdit(focus?{row:after==null?active.p.parts.length-1:after+1,field:'time'}:null)}
 function duplicatePart(i){const c=structuredClone(active.p.parts[i]);c.id=Date.now()+Math.random();active.p.parts.splice(i+1,0,c);drawEdit({row:i+1,field:'time'})}
 function removePart(i){if(active.p.parts.length>1){active.p.parts.splice(i,1);drawEdit({row:Math.min(i,active.p.parts.length-1),field:'time'})}}
 function editorKey(e,row,field){
@@ -684,7 +709,7 @@ function drawLive(){
         <section class="dash-panel">
           <h3>PASSPROFIL</h3>
           <div class="dash-profile">
-            ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
+            ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${intensityHeight(p,x)}%;background:${intensityColor(p,x)}"></div>`).join('')}
             <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div>
           </div>
           <div class="dash-stats">
@@ -699,10 +724,10 @@ function drawLive(){
           <div class="moment-now">${s.part.moment||''}</div>
           <div class="instruction-now">${s.part.instruction||''}</div>
 
-          <div class="count-ring" style="--progress:${progressPct}%;--ring-color:${color(s.part.borg)}">
+          <div class="count-ring" style="--progress:${progressPct}%;--ring-color:${intensityColor(p,s.part)}">
             <div class="count-ring-content">
-              <div class="ring-label">BORG</div>
-              <div class="ring-borg" style="color:${color(s.part.borg)}">${s.part.borg}</div>
+              <div class="ring-label">${intensityHeading(p)}</div>
+              <div class="ring-borg" style="color:${intensityColor(p,s.part)}">${intensityShort(p,s.part)}</div>
               <div class="ring-time">${fmt(s.left)}</div>
               <div class="ring-kvar">KVAR</div>
             </div>
@@ -713,7 +738,7 @@ function drawLive(){
           <h3>NÄSTA</h3>
           ${n?`
             <div class="moment">${n.moment||''}</div>
-            <div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div>
+            <div class="borg">${intensityHeading(p)} <span style="color:${intensityColor(p,n)}">${intensityShort(p,n)}</span></div>
             <div class="time">${n.time}</div>
             <div class="muted">${n.instruction||''}</div>
           `:'<div class="moment">MÅL 🎉</div>'}
@@ -741,8 +766,8 @@ function drawLive(){
     <div class="liveTop">
       <div class="liveBrand"></div>
       <div class="current">
-        <div class="label">BORG</div>
-        <div class="borgBig" style="color:${color(s.part.borg)}">${s.part.borg}</div>
+        <div class="label">${intensityHeading(p)}</div>
+        <div class="borgBig" style="color:${intensityColor(p,s.part)}">${intensityShort(p,s.part)}</div>
         <div class="count">${fmt(s.left)}</div>
         <div class="remain">KVAR</div>
         <div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div>
@@ -750,7 +775,7 @@ function drawLive(){
       <div class="next">
         <div class="label">NÄSTA</div>
         ${n?`
-          <div class="borg">BORG <span style="color:${color(n.borg)}">${n.borg}</span></div>
+          <div class="borg">${intensityHeading(p)} <span style="color:${intensityColor(p,n)}">${intensityShort(p,n)}</span></div>
           <div class="time">${n.time}</div>
           <div class="moment">${n.moment}</div>
         `:'<div class="moment">MÅL 🎉</div>'}
@@ -758,7 +783,7 @@ function drawLive(){
     </div>
 
     <div class="liveProfile">
-      ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${Math.max(12,(x.borg-6)/14*100)}%;background:${color(x.borg)}"></div>`).join('')}
+      ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${intensityHeight(p,x)}%;background:${intensityColor(p,x)}"></div>`).join('')}
       <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div>
     </div>
 
