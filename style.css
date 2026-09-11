@@ -280,3 +280,60 @@ main{padding-top:24px;padding-bottom:76px}
 .next-range{font-size:20px;margin:4px 0 2px;color:#c3cbd0}
 .dash-next .next-range{font-size:19px}
 @media(max-width:800px){.current-range{font-size:21px}.ring-range{font-size:17px}}
+
+
+/* Prototype 2.3.2 – FTP presentation and register clarity */
+
+/* Zone names scale down only when needed, keeping short names as large as possible. */
+.ring-borg.zone-medium{font-size:68px}
+.ring-borg.zone-long{font-size:58px}
+.ring-borg.zone-xlong{font-size:50px}
+
+.borgBig.zone-medium{font-size:.88em}
+.borgBig.zone-long{font-size:.76em}
+.borgBig.zone-xlong{font-size:.66em}
+
+.dash-next .borg span.zone-medium{font-size:.92em}
+.dash-next .borg span.zone-long{font-size:.82em}
+.dash-next .borg span.zone-xlong{font-size:.72em}
+
+/* The percentage range is participant-facing information: make it prominent. */
+.ring-range{
+  font-size:25px;
+  margin-top:12px;
+  letter-spacing:.02em;
+}
+.current-range{
+  font-size:32px;
+  margin:12px 0 8px;
+  letter-spacing:.02em;
+}
+.dash-next .next-range{
+  font-size:28px;
+  line-height:1.1;
+  margin:12px 0 0;
+  letter-spacing:.02em;
+  color:#d4dbe0;
+}
+
+/* Separate intensity from the upcoming block duration. */
+.dash-next .time{
+  margin:34px 0 12px;
+}
+
+/* Clearly show which intensity model's values are currently open. */
+.value-button.selected{
+  background:#E31836;
+  border-color:#E31836;
+  color:#fff;
+  box-shadow:0 0 0 2px rgba(227,24,54,.18);
+}
+
+@media(max-width:800px){
+  .ring-borg.zone-medium{font-size:56px}
+  .ring-borg.zone-long{font-size:49px}
+  .ring-borg.zone-xlong{font-size:43px}
+  .ring-range{font-size:21px}
+  .current-range{font-size:26px}
+  .dash-next .next-range{font-size:24px}
+}
