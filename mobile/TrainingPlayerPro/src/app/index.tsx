@@ -16,18 +16,30 @@ import {
 const HEART_RATE_SERVICE = "180D";
 const HEART_RATE_MEASUREMENT = "2A37";
 
+const CYCLING_POWER_SERVICE = "1818";
+const CYCLING_POWER_MEASUREMENT = "2A63";
+
 export default function DeviceManagerScreen() {
   const bleManager = useRef(new BleManager()).current;
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+
   const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
   const [heartRate, setHeartRate] = useState<number | null>(null);
+  const [power, setPower] = useState<number | null>(null);
+  const [cadence, setCadence] = useState<number | null>(null);
+  const [deviceType, setDeviceType] = useState<
+    "heart-rate" | "cycling" | "unknown" | null
+  >(null);
+
   const heartRateSubscription = useRef<Subscription | null>(null);
+  const cyclingSubscription = useRef<Subscription | null>(null);
 
   useEffect(() => {
     return () => {
       heartRateSubscription.current?.remove();
+      cyclingSubscription.current?.remove();
       bleManager.stopDeviceScan();
       bleManager.destroy();
     };
@@ -70,49 +82,149 @@ export default function DeviceManagerScreen() {
     }, 10000);
   };
 
-  const connectToHeartRateDevice = async (device: Device) => {
+  const decodeHeartRate = (value: string) => {
+    const bytes = Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
+    const flags = bytes[0];
+    const is16Bit = (flags & 0x01) !== 0;
+
+    return is16Bit ? bytes[1] | (bytes[2] << 8) : bytes[1];
+  };
+
+  const decodeCyclingPower = (value: string) => {
+    const bytes = Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
+
+    if (bytes.length < 4) return;
+
+    const flags = bytes[0] | (bytes[1] << 8);
+
+    const instantaneousPowerRaw = bytes[2] | (bytes[3] << 8);
+    const instantaneousPower =
+      instantaneousPowerRaw & 0x8000
+        ? instantaneousPowerRaw - 0x10000
+        : instantaneousPowerRaw;
+
+    setPower(instantaneousPower);
+
+    let offset = 4;
+
+    const pedalPowerBalancePresent = (flags & (1 << 0)) !== 0;
+    if (pedalPowerBalancePresent) offset += 1;
+
+    const accumulatedTorquePresent = (flags & (1 << 2)) !== 0;
+    if (accumulatedTorquePresent) offset += 2;
+
+    const wheelRevolutionDataPresent = (flags & (1 << 4)) !== 0;
+    if (wheelRevolutionDataPresent) offset += 6;
+
+    const crankRevolutionDataPresent = (flags & (1 << 5)) !== 0;
+
+    if (crankRevolutionDataPresent && bytes.length >= offset + 4) {
+      // Ackumulerade vevvarv + event time.
+      // Vi börjar med att verifiera att datan finns.
+      // Exakt RPM-beräkning lägger vi på efter första cykeltestet.
+      setCadence(-1);
+    } else {
+      setCadence(null);
+    }
+  };
+
+  const connectToDevice = async (device: Device) => {
     try {
       bleManager.stopDeviceScan();
       setIsScanning(false);
+
       setHeartRate(null);
+      setPower(null);
+      setCadence(null);
+      setDeviceType(null);
+
+      heartRateSubscription.current?.remove();
+      cyclingSubscription.current?.remove();
 
       const connected = await device.connect();
       const discovered =
         await connected.discoverAllServicesAndCharacteristics();
 
+      const services = await discovered.services();
+      const serviceUuids = services.map((service) =>
+        service.uuid.toUpperCase()
+      );
+
       setConnectedDevice(discovered);
 
-      heartRateSubscription.current?.remove();
+      const hasHeartRateService = serviceUuids.some((uuid) =>
+        uuid.includes("180D")
+      );
 
-      heartRateSubscription.current =
-        discovered.monitorCharacteristicForService(
-          HEART_RATE_SERVICE,
-          HEART_RATE_MEASUREMENT,
-          (error, characteristic) => {
-            if (error) {
-              console.log("Heart rate monitor error:", error);
-              return;
+      const hasCyclingPowerService = serviceUuids.some((uuid) =>
+        uuid.includes("1818")
+      );
+
+      if (hasHeartRateService) {
+        setDeviceType("heart-rate");
+
+        heartRateSubscription.current =
+          discovered.monitorCharacteristicForService(
+            HEART_RATE_SERVICE,
+            HEART_RATE_MEASUREMENT,
+            (error, characteristic) => {
+              if (error) {
+                console.log("Heart rate monitor error:", error);
+                return;
+              }
+
+              if (!characteristic?.value) return;
+
+              const bpm = decodeHeartRate(characteristic.value);
+              setHeartRate(bpm);
             }
+          );
+      }
 
-            if (!characteristic?.value) return;
+      if (hasCyclingPowerService) {
+        setDeviceType("cycling");
 
-            const bytes = Uint8Array.from(
-              atob(characteristic.value),
-              (c) => c.charCodeAt(0)
-            );
+        cyclingSubscription.current =
+          discovered.monitorCharacteristicForService(
+            CYCLING_POWER_SERVICE,
+            CYCLING_POWER_MEASUREMENT,
+            (error, characteristic) => {
+              if (error) {
+                console.log("Cycling power monitor error:", error);
+                return;
+              }
 
-            const flags = bytes[0];
-            const is16Bit = (flags & 0x01) !== 0;
+              if (!characteristic?.value) return;
 
-            const bpm = is16Bit
-              ? bytes[1] | (bytes[2] << 8)
-              : bytes[1];
+              decodeCyclingPower(characteristic.value);
+            }
+          );
+      }
 
-            setHeartRate(bpm);
-          }
-        );
+      if (!hasHeartRateService && !hasCyclingPowerService) {
+        setDeviceType("unknown");
+      }
     } catch (error) {
       console.log("Connection error:", error);
+    }
+  };
+
+  const disconnect = async () => {
+    try {
+      heartRateSubscription.current?.remove();
+      cyclingSubscription.current?.remove();
+
+      if (connectedDevice) {
+        await bleManager.cancelDeviceConnection(connectedDevice.id);
+      }
+
+      setConnectedDevice(null);
+      setHeartRate(null);
+      setPower(null);
+      setCadence(null);
+      setDeviceType(null);
+    } catch (error) {
+      console.log("Disconnect error:", error);
     }
   };
 
@@ -141,15 +253,48 @@ export default function DeviceManagerScreen() {
       {connectedDevice && (
         <View style={styles.connectedCard}>
           <Text style={styles.connectedLabel}>Connected</Text>
+
           <Text style={styles.connectedName}>
             {connectedDevice.name ||
               connectedDevice.localName ||
               "Unknown device"}
           </Text>
 
-          <Text style={styles.heartRate}>
-            ❤️ {heartRate ?? "--"} bpm
+          <Text style={styles.deviceType}>
+            {deviceType === "heart-rate" && "Heart Rate Device"}
+            {deviceType === "cycling" && "Cycling Power Device"}
+            {deviceType === "unknown" && "Unknown BLE Device"}
           </Text>
+
+          {deviceType === "heart-rate" && (
+            <Text style={styles.bigValue}>
+              ❤️ {heartRate ?? "--"} bpm
+            </Text>
+          )}
+
+          {deviceType === "cycling" && (
+            <>
+              <Text style={styles.bigValue}>
+                ⚡ {power ?? "--"} W
+              </Text>
+
+              <Text style={styles.secondaryValue}>
+                RPM:{" "}
+                {cadence === -1
+                  ? "data detected"
+                  : cadence ?? "--"}
+              </Text>
+            </>
+          )}
+
+          <Pressable
+            style={styles.disconnectButton}
+            onPress={disconnect}
+          >
+            <Text style={styles.disconnectButtonText}>
+              Disconnect
+            </Text>
+          </Pressable>
         </View>
       )}
 
@@ -162,7 +307,7 @@ export default function DeviceManagerScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => connectToHeartRateDevice(item)}
+            onPress={() => connectToDevice(item)}
             style={styles.deviceCard}
           >
             <View style={styles.deviceInfo}>
@@ -250,10 +395,34 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  heartRate: {
+  deviceType: {
+    fontSize: 13,
+    color: "#666666",
+    marginTop: 4,
+  },
+
+  bigValue: {
     fontSize: 34,
     fontWeight: "700",
-    marginTop: 12,
+    marginTop: 14,
+  },
+
+  secondaryValue: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+
+  disconnectButton: {
+    marginTop: 18,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#dddddd",
+    alignItems: "center",
+  },
+
+  disconnectButtonText: {
+    fontWeight: "600",
   },
 
   sectionTitle: {
