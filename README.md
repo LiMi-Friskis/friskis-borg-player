@@ -1,15 +1,11 @@
-# Friskis Training Player — Prototype 2.3.0
+# Friskis Training Player — Prototype 2.3.1
 
-Ny huvudfunktion: dynamiska intensitetsmodeller med fullt FTP-stöd.
+Hotfix efter 2.3.0:
+- Moment och Beskrivning använder nu en egen combobox som fungerar även där browserns datalist varit opålitlig.
+- Användaren kan både välja ett registerförslag och skriva egen text.
+- FTP-spelaren visar nu procentintervallet för aktuell och nästa zon, t.ex. `56–75 % FTP`.
+- Borg-visningen är oförändrad.
 
-- Borg: exakta nivåer 6–20
-- FTP: fem föreslagna zoner i % FTP
-- FTP-zoner visas som val i passeditorn
-- spelaren och passprofilen använder vald intensitetsmodell
-- registervården visar Värde för exakta modeller och Från/Till för zonmodeller
-- FTP-förslaget är uttryckligen ett diskussionsunderlag och kan ändras av Admin/Super User
-- fungerande WAV-ljud och TP-ikoner från 2.2.5 är kvar
-
-Kör `07_prototype_2_3_0_ftp.sql` en gång före test.
+Ingen SQL. Ingen Edge Function.
 
 © 2026 LiMi Equus AB. Alla rättigheter förbehållna.

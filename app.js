@@ -37,8 +37,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.0')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.1')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -177,7 +177,7 @@ function userTools(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -528,6 +528,7 @@ function intensityLabel(p,part){
   return `${v.label}${range?' · '+range:''}`;
 }
 function intensityShort(p,part){const m=intensityModel(p);return (!m||m.code==='borg')?String(part.borg??''):intensityValue(p,part)?.label||part.intensity||'—'}
+function intensityRange(p,part){const m=intensityModel(p);if(!m||m.code==='borg')return '';const v=intensityValue(p,part);if(!v)return '';const unit=m.unit_label||'';if(v.min_value==null&&v.max_value!=null)return `≤ ${v.max_value} ${unit}`.trim();if(v.min_value!=null&&v.max_value==null)return `> ${Number(v.min_value)-1} ${unit}`.trim();if(v.min_value!=null&&v.max_value!=null)return `${v.min_value}–${v.max_value} ${unit}`.trim();return ''}
 function intensityColor(p,part){const m=intensityModel(p);if(!m||m.code==='borg')return color(part.borg);return intensityValue(p,part)?.color_hex||'#888888'}
 function intensityHeight(p,part){const m=intensityModel(p);if(!m||m.code==='borg')return Math.max(15,(part.borg-6)/14*100);const vals=intensityValues(p),v=intensityValue(p,part),i=Math.max(0,vals.findIndex(x=>x.id===v?.id));return vals.length?Math.max(20,((i+1)/vals.length)*100):50}
 function intensityHeading(p){const m=intensityModel(p);return (!m||m.code==='borg')?'BORG':(m.name||'INTENSITET').toUpperCase()}
@@ -562,25 +563,38 @@ async function edit(i){
 function escAttr(v){return String(v??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
 function drawEdit(focus=null){
   let p=active.p; const model=registries.models.find(x=>x.id===p.intensity_model_id); const isBorg=!model||model.code==='borg';
-  const descriptions=registries.descriptions.filter(x=>x.is_active!==false).map(x=>`<option value="${escAttr(x.text)}"></option>`).join('');
-  const moments=registries.moments.filter(x=>x.is_active!==false).map(x=>`<option value="${escAttr(x.text)}"></option>`).join('');
   const pageTitle=active.i==null?'Skapa nytt pass':'Redigera pass';
   app.innerHTML=`<div class="editor-head"><div><h1>${pageTitle}</h1><div class="muted">Direktredigera tabellen. Moment och beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
   <input class="name" id="pname" value="${escAttr(p.name)}" oninput="active.p.name=this.value">
   <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;const v=intensityValues(active.p)[0];if(v)active.p.parts.forEach(x=>x.intensity=v.code);drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div>${isSuper()?`<div class="field owner-field"><label>Ägare</label><select onchange="active.p.owner_id=this.value">${profiles.filter(x=>x.is_active!==false).map(x=>`<option value="${x.user_id}" ${x.user_id===p.owner_id?'selected':''}>${escAttr(x.display_name||'Användare')} · ${roleLabel(x.role)}</option>`).join('')}</select></div>`:`<div class="field owner-field"><label>Ägare</label><div class="readonly-field">${escAttr(ownerName(p))}</div></div>`}</div>
   <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile editor-profile')}
-  <datalist id="momentSuggestions">${moments}</datalist><datalist id="descriptionSuggestions">${descriptions}</datalist>
   <div class="row row-head"><span>#</span><span>Tid</span><span>Intensitet</span><span>Moment</span><span>Beskrivning</span><span></span></div>
   <div id="rows">${p.parts.map((x,j)=>`<div class="row" data-row="${j}"><b>${j+1}</b>
   <input data-field="time" value="${escAttr(x.time)}" oninput="setPart(${j},'time',this.value)" onkeydown="editorKey(event,${j},'time')">
   ${isBorg?`<select data-field="borg" class="borginput" onchange="setPart(${j},'borg',this.value);this.style.background=color(this.value);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<select data-field="borg" class="borginput" onchange="setPart(${j},'intensity',this.value);this.style.background=intensityColor(active.p,active.p.parts[${j}]);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${intensityColor(p,x)}">${intensityValues(p).map(v=>`<option value="${escAttr(v.code)}" ${v.code===(x.intensity||intensityValues(p)[0]?.code)?'selected':''}>${escAttr(v.label)}${v.min_value!=null||v.max_value!=null?' · '+(v.min_value==null?'≤'+v.max_value:v.max_value==null?'>'+v.min_value:v.min_value+'–'+v.max_value)+' '+escAttr(model?.unit_label||''):''}</option>`).join('')}</select>`}
-  <input data-field="moment" list="momentSuggestions" value="${escAttr(x.moment)}" placeholder="Moment" oninput="setPart(${j},'moment',this.value)" onkeydown="editorKey(event,${j},'moment')">
-  <input data-field="instruction" class="instruction" list="descriptionSuggestions" value="${escAttr(x.instruction)}" placeholder="Beskrivning" oninput="setPart(${j},'instruction',this.value)" onkeydown="editorKey(event,${j},'instruction')">
+  ${comboField('moment',j,x.moment,'Moment','moments')}
+  ${comboField('instruction',j,x.instruction,'Beskrivning','descriptions','instruction')}
   <div class="rowtools"><button class="iconbtn small" title="Duplicera block" onclick="duplicatePart(${j})">⧉</button><button class="iconbtn small danger" title="Ta bort block" onclick="removePart(${j})">×</button></div></div>`).join('')}</div>
   <div class="editor-actions-sticky"><div class="editor-total"><b>Total tid: <span id="editorTotal">${fmt(total(p))}</span></b></div><div class="actions editor-actions"><button onclick="addPart(null,true)">+ LÄGG TILL BLOCK</button><button onclick="preview()">▶ PROVKÖR</button><button class="primary" onclick="saveEdit()">SPARA PASS</button></div></div></div>`;
   if(focus) requestAnimationFrame(()=>focusEditor(focus.row,focus.field));
 }
+function comboItems(kind){return (registries[kind]||[]).filter(x=>x.is_active!==false).map(x=>x.text).filter(Boolean)}
+function comboField(key,row,value,placeholder,kind,extraClass=''){
+  return `<div class="combo-wrap ${extraClass}"><input data-field="${key}" data-row="${row}" data-key="${key}" data-combo="${kind}" value="${escAttr(value||'')}" placeholder="${placeholder}" autocomplete="off" onfocus="openCombo(this)" onclick="openCombo(this)" oninput="setPart(${row},'${key}',this.value);openCombo(this)" onkeydown="editorKey(event,${row},'${key}')"><button type="button" class="combo-toggle" tabindex="-1" onclick="toggleCombo(this.previousElementSibling,event)">⌄</button><div class="combo-menu"></div></div>`;
+}
+function openCombo(input){
+  closeCombos(input.closest('.combo-wrap'));
+  const wrap=input.closest('.combo-wrap'), menu=wrap?.querySelector('.combo-menu'); if(!menu)return;
+  const q=(input.value||'').trim().toLowerCase();
+  const items=comboItems(input.dataset.combo).filter(t=>!q||t.toLowerCase().includes(q));
+  menu.innerHTML=(items.length?items:['Inga förslag']).map(t=>items.length?`<button type="button" onmousedown="event.preventDefault()" onclick="chooseCombo(this,'${encodeURIComponent(t)}')">${escAttr(t)}</button>`:`<div class="combo-empty">${t}</div>`).join('');
+  menu.classList.add('open');
+}
+function toggleCombo(input,e){if(e)e.stopPropagation();const menu=input.closest('.combo-wrap')?.querySelector('.combo-menu');if(menu?.classList.contains('open'))menu.classList.remove('open');else{input.focus();openCombo(input)}}
+function chooseCombo(btn,encoded){const wrap=btn.closest('.combo-wrap'),input=wrap.querySelector('input');const value=decodeURIComponent(encoded);input.value=value;setPart(+input.dataset.row,input.dataset.key,value);wrap.querySelector('.combo-menu')?.classList.remove('open');input.focus()}
+function closeCombos(except=null){document.querySelectorAll('.combo-wrap').forEach(w=>{if(w!==except)w.querySelector('.combo-menu')?.classList.remove('open')})}
+document.addEventListener('mousedown',e=>{if(!e.target.closest('.combo-wrap'))closeCombos()});
 function setPart(i,k,v){active.p.parts[i][k]=k==='borg'?Math.max(6,Math.min(20,+v)):v; const t=document.querySelector('#editorTotal');if(t)t.textContent=fmt(total(active.p));if(k==='time')refreshProfile()}
 function refreshProfile(){const el=document.querySelector('.editor-profile');if(el)el.outerHTML=bars(active.p,'profile editor-profile')}
 function focusEditor(row,field='time'){const el=document.querySelector(`.row[data-row="${row}"] [data-field="${field}"]`);if(el){el.focus();if(el.select)el.select()}}
@@ -728,6 +742,7 @@ function drawLive(){
             <div class="count-ring-content">
               <div class="ring-label">${intensityHeading(p)}</div>
               <div class="ring-borg" style="color:${intensityColor(p,s.part)}">${intensityShort(p,s.part)}</div>
+              ${intensityRange(p,s.part)?`<div class="ring-range">${intensityRange(p,s.part)}</div>`:''}
               <div class="ring-time">${fmt(s.left)}</div>
               <div class="ring-kvar">KVAR</div>
             </div>
@@ -739,6 +754,7 @@ function drawLive(){
           ${n?`
             <div class="moment">${n.moment||''}</div>
             <div class="borg">${intensityHeading(p)} <span style="color:${intensityColor(p,n)}">${intensityShort(p,n)}</span></div>
+            ${intensityRange(p,n)?`<div class="intensity-range next-range">${intensityRange(p,n)}</div>`:''}
             <div class="time">${n.time}</div>
             <div class="muted">${n.instruction||''}</div>
           `:'<div class="moment">MÅL 🎉</div>'}
@@ -768,6 +784,7 @@ function drawLive(){
       <div class="current">
         <div class="label">${intensityHeading(p)}</div>
         <div class="borgBig" style="color:${intensityColor(p,s.part)}">${intensityShort(p,s.part)}</div>
+        ${intensityRange(p,s.part)?`<div class="intensity-range current-range">${intensityRange(p,s.part)}</div>`:''}
         <div class="count">${fmt(s.left)}</div>
         <div class="remain">KVAR</div>
         <div class="totalRemain"><b>${fmt(remain)}</b> KVAR AV PASSET</div>
@@ -776,6 +793,7 @@ function drawLive(){
         <div class="label">NÄSTA</div>
         ${n?`
           <div class="borg">${intensityHeading(p)} <span style="color:${intensityColor(p,n)}">${intensityShort(p,n)}</span></div>
+          ${intensityRange(p,n)?`<div class="intensity-range next-range">${intensityRange(p,n)}</div>`:''}
           <div class="time">${n.time}</div>
           <div class="moment">${n.moment}</div>
         `:'<div class="moment">MÅL 🎉</div>'}

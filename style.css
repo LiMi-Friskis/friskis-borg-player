@@ -263,3 +263,20 @@ main{padding-top:24px;padding-bottom:76px}
 @media(max-width:800px){
   .register-head{align-items:flex-start;flex-direction:column}
 }
+
+
+/* Prototype 2.3.1 – robust combobox + FTP interval in player */
+.combo-wrap{position:relative;display:flex;align-items:stretch;min-width:0}
+.combo-wrap input{padding-right:34px}
+.combo-toggle{position:absolute;right:1px;top:1px;bottom:1px;width:32px;min-width:32px;padding:0;border:0;border-left:1px solid #354148;border-radius:0 7px 7px 0;background:#1b2328;color:#cbd2d8;font-size:18px;z-index:2}
+.combo-menu{display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);max-height:220px;overflow:auto;background:#11181c;border:1px solid #46545d;border-radius:9px;box-shadow:0 12px 28px rgba(0,0,0,.45);z-index:100}
+.combo-menu.open{display:block}
+.combo-menu button{display:block;width:100%;text-align:left;border:0;border-radius:0;background:transparent;color:#fff;padding:10px 12px;font-size:14px}
+.combo-menu button:hover{background:#252f35}
+.combo-empty{padding:10px 12px;color:#87939a;font-size:13px}
+.ring-range,.intensity-range{color:#d4dbe0;font-weight:800;letter-spacing:.04em}
+.ring-range{font-size:20px;margin-top:9px}
+.current-range{font-size:26px;margin:10px 0 4px}
+.next-range{font-size:20px;margin:4px 0 2px;color:#c3cbd0}
+.dash-next .next-range{font-size:19px}
+@media(max-width:800px){.current-range{font-size:21px}.ring-range{font-size:17px}}
