@@ -1,6 +1,6 @@
 # Friskis Training Player – Music Import v0.1
 
-Parallellt utvecklingsspår ovanpå stabila Prototype 2.3.4.
+Parallellt utvecklingsspår ovanpå stabila Prototype 2.4.1.
 
 Music Import v0.1:
 - endast Super User

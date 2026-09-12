@@ -38,8 +38,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.3.4'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.3.4')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.4.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.4.1')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -230,15 +230,31 @@ function musicCounts(items){
   const tracks=items.filter(x=>x.type==='track').length, pauses=items.filter(x=>x.type==='pause').length;
   const total=items.reduce((n,x)=>n+(+x.duration_sec||0),0);return {tracks,pauses,total};
 }
+let musicSelectedFiles=[];
 function showMusicImport(){
   if(!auth){login();return}
   if(!isSuper()){alert('Music Import v0.1 är endast tillgänglig för Super Users.');return}
   stop();setBrand('FRISKIS TRAINING PLAYER','MUSIC IMPORT v0.1');setHomeButton(true);musicImportDraft=null;
-  app.innerHTML=`${userTools()}<div class="music-import-shell"><div class="music-step">1 AV 3 · SCREENSHOTS</div><h1>Skapa pass från musiklista</h1><p class="muted">Ladda upp en eller flera screenshots från FitnessPlayer. Överlapp mellan bilderna dedupliceras automatiskt.</p>
-    <div class="music-upload-card"><div class="field"><label>Namn på musiklista <span class="muted">(valfritt)</span></label><input id="musicTitleHint" placeholder="t.ex. Ingvar Gubbröra HT-26"></div>
-    <label class="music-drop" for="musicScreenshots"><b>📷 Välj screenshots</b><span>PNG, JPG eller WEBP · flera bilder går bra</span></label><input id="musicScreenshots" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple onchange="previewMusicFiles(this.files)"><div id="musicFilePreview" class="music-file-preview"></div></div>
+  musicSelectedFiles=[];
+  app.innerHTML=`${userTools()}<div class="music-import-shell"><div class="music-step">1 AV 3 · SCREENSHOTS</div><h1>Skapa pass från musiklista</h1><p class="muted">Ladda upp en eller flera screenshots från FitnessPlayer. Musiklistans namn hämtas automatiskt från bilderna och överlapp dedupliceras.</p>
+    <div class="music-upload-card">
+    <label class="music-drop" id="musicDropZone" for="musicScreenshots" ondragenter="musicDragEnter(event)" ondragover="musicDragOver(event)" ondragleave="musicDragLeave(event)" ondrop="musicDrop(event)"><b>📷 Dra screenshots hit eller klicka för att välja</b><span>PNG, JPG eller WEBP · flera bilder går bra</span></label><input id="musicScreenshots" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple onchange="setMusicFiles(this.files)"><div id="musicFilePreview" class="music-file-preview"></div></div>
     <div class="actions"><button class="primary" id="analyzeMusicBtn" onclick="analyzeMusicScreenshots()">ANALYSERA MUSIKLISTA</button><button onclick="list()">AVBRYT</button></div>
     <div class="muted music-privacy">Bilderna används endast för analys i importflödet och sparas inte i Training Player-databasen.</div></div>`;
+}
+function validMusicImageFile(f){return f && /^image\/(png|jpeg|webp)$/i.test(f.type)}
+function setMusicFiles(files){
+  const incoming=[...(files||[])].filter(validMusicImageFile);
+  if(!incoming.length){if(files?.length)alert('Välj PNG, JPG eller WEBP.');return}
+  musicSelectedFiles=incoming.slice(0,10);
+  previewMusicFiles(musicSelectedFiles);
+}
+function musicDragEnter(e){e.preventDefault();e.stopPropagation();document.querySelector('#musicDropZone')?.classList.add('drag-over')}
+function musicDragOver(e){e.preventDefault();e.stopPropagation();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';document.querySelector('#musicDropZone')?.classList.add('drag-over')}
+function musicDragLeave(e){e.preventDefault();e.stopPropagation();const z=document.querySelector('#musicDropZone');if(z&&!z.contains(e.relatedTarget))z.classList.remove('drag-over')}
+function musicDrop(e){
+  e.preventDefault();e.stopPropagation();document.querySelector('#musicDropZone')?.classList.remove('drag-over');
+  const files=e.dataTransfer?.files;if(files?.length)setMusicFiles(files);
 }
 function previewMusicFiles(files){
   const box=document.querySelector('#musicFilePreview');if(!box)return;box.innerHTML='';
@@ -261,13 +277,13 @@ async function musicImportEdge(payload,retry=true){
 }
 async function analyzeMusicScreenshots(){
   if(!isSuper())return;
-  const input=document.querySelector('#musicScreenshots'),files=[...(input?.files||[])];
+  const files=[...musicSelectedFiles];
   if(!files.length){alert('Välj minst en screenshot.');return}
   const btn=document.querySelector('#analyzeMusicBtn');btn.disabled=true;btn.textContent='ANALYSERAR…';
   try{
     const images=[];for(let i=0;i<files.length;i++)images.push({name:files[i].name,data_url:await optimizedImageDataUrl(files[i])});
-    const data=await musicImportEdge({title_hint:document.querySelector('#musicTitleHint')?.value.trim()||'',images});
-    musicImportDraft={title:data.source_title||document.querySelector('#musicTitleHint')?.value.trim()||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
+    const data=await musicImportEdge({title_hint:'',images});
+    musicImportDraft={title:data.source_title||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
     showMusicImportPreview();
   }catch(e){alert('Kunde inte analysera musiklistan: '+e.message);btn.disabled=false;btn.textContent='ANALYSERA MUSIKLISTA'}
 }
@@ -323,7 +339,7 @@ async function createPassFromMusic(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.3.4</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.4.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
