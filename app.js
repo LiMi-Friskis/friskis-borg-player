@@ -25,6 +25,7 @@ const shortDemo={id:'demo-short',name:'Kort demo – 8 min',parts:[
 ].map((x,i)=>({id:'s'+(i+1),time:x[0],borg:x[1],moment:x[2],instruction:x[3]}))};
 
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
+let musicImportDraft=null;
 let liveView=localStorage.getItem('friskis-live-view')||'clean';
 let cueKey='', prestartTimer=null;
 const SESSION_KEY='friskis-active-session';
@@ -216,6 +217,108 @@ function userTools(){
     <button class="iconbtn" title="Hjälp" aria-label="Hjälp" onclick="showHelp()">?</button>
     ${auth?`<details class="usermenu"><summary>👤 ${escAttr(name)} ▾</summary><div class="usermenu-pop"><div><b>${escAttr(name)}</b><small>${roleLabel(currentProfile?.role)}</small></div><button onclick="signOut()">Logga ut</button></div></details>`:`<button onclick="login()">LOGGA IN</button>`}
   </div>`
+}
+
+
+function musicDurationText(seconds){seconds=Math.max(0,Math.round(+seconds||0));return fmt(seconds)}
+function parseMusicDuration(value){
+  const s=String(value||'').trim();
+  if(/^\d+$/.test(s))return +s;
+  const m=s.match(/^(\d+):([0-5]?\d)$/);return m?(+m[1]*60 + +m[2]):0;
+}
+function musicCounts(items){
+  const tracks=items.filter(x=>x.type==='track').length, pauses=items.filter(x=>x.type==='pause').length;
+  const total=items.reduce((n,x)=>n+(+x.duration_sec||0),0);return {tracks,pauses,total};
+}
+function showMusicImport(){
+  if(!auth){login();return}
+  if(!isSuper()){alert('Music Import v0.1 är endast tillgänglig för Super Users.');return}
+  stop();setBrand('FRISKIS TRAINING PLAYER','MUSIC IMPORT v0.1');setHomeButton(true);musicImportDraft=null;
+  app.innerHTML=`${userTools()}<div class="music-import-shell"><div class="music-step">1 AV 3 · SCREENSHOTS</div><h1>Skapa pass från musiklista</h1><p class="muted">Ladda upp en eller flera screenshots från FitnessPlayer. Överlapp mellan bilderna dedupliceras automatiskt.</p>
+    <div class="music-upload-card"><div class="field"><label>Namn på musiklista <span class="muted">(valfritt)</span></label><input id="musicTitleHint" placeholder="t.ex. Ingvar Gubbröra HT-26"></div>
+    <label class="music-drop" for="musicScreenshots"><b>📷 Välj screenshots</b><span>PNG, JPG eller WEBP · flera bilder går bra</span></label><input id="musicScreenshots" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple onchange="previewMusicFiles(this.files)"><div id="musicFilePreview" class="music-file-preview"></div></div>
+    <div class="actions"><button class="primary" id="analyzeMusicBtn" onclick="analyzeMusicScreenshots()">ANALYSERA MUSIKLISTA</button><button onclick="list()">AVBRYT</button></div>
+    <div class="muted music-privacy">Bilderna används endast för analys i importflödet och sparas inte i Training Player-databasen.</div></div>`;
+}
+function previewMusicFiles(files){
+  const box=document.querySelector('#musicFilePreview');if(!box)return;box.innerHTML='';
+  [...files].forEach((f,i)=>{const u=URL.createObjectURL(f);box.insertAdjacentHTML('beforeend',`<div class="music-file"><img src="${u}" alt="Screenshot ${i+1}"><div><b>Bild ${i+1}</b><small>${escAttr(f.name)} · ${Math.round(f.size/1024)} KB</small></div></div>`)})
+}
+async function optimizedImageDataUrl(file){
+  const raw=await new Promise((ok,bad)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=bad;r.readAsDataURL(file)});
+  const img=await new Promise((ok,bad)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=bad;i.src=raw});
+  const max=1800,scale=Math.min(1,max/Math.max(img.width,img.height)),w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+  const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+  return c.toDataURL('image/jpeg',.88);
+}
+async function musicImportEdge(payload,retry=true){
+  if(auth&&sessionNeedsRefresh())await refreshAuthSession();
+  const res=await fetch(SUPABASE_URL+'/functions/v1/music-import',{method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+auth.access_token,'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const text=await res.text();
+  if((res.status===401||/JWT expired/i.test(text))&&retry&&auth?.refresh_token){await refreshAuthSession();return musicImportEdge(payload,false)}
+  let data={};try{data=text?JSON.parse(text):{}}catch{data={error:text}}
+  if(!res.ok)throw new Error(data.error||data.message||('HTTP '+res.status));return data;
+}
+async function analyzeMusicScreenshots(){
+  if(!isSuper())return;
+  const input=document.querySelector('#musicScreenshots'),files=[...(input?.files||[])];
+  if(!files.length){alert('Välj minst en screenshot.');return}
+  const btn=document.querySelector('#analyzeMusicBtn');btn.disabled=true;btn.textContent='ANALYSERAR…';
+  try{
+    const images=[];for(let i=0;i<files.length;i++)images.push({name:files[i].name,data_url:await optimizedImageDataUrl(files[i])});
+    const data=await musicImportEdge({title_hint:document.querySelector('#musicTitleHint')?.value.trim()||'',images});
+    musicImportDraft={title:data.source_title||document.querySelector('#musicTitleHint')?.value.trim()||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
+    showMusicImportPreview();
+  }catch(e){alert('Kunde inte analysera musiklistan: '+e.message);btn.disabled=false;btn.textContent='ANALYSERA MUSIKLISTA'}
+}
+function musicPreviewRow(x,i){
+  return `<tr data-music-row="${i}"><td class="music-order">${i+1}</td><td><select onchange="musicImportDraft.items[${i}].type=this.value;showMusicImportPreview()"><option value="track" ${x.type==='track'?'selected':''}>Låt</option><option value="pause" ${x.type==='pause'?'selected':''}>PAUSE</option></select></td><td>${x.type==='track'?`<input value="${escAttr(x.artist||'')}" oninput="musicImportDraft.items[${i}].artist=this.value">`:''}</td><td>${x.type==='track'?`<input value="${escAttr(x.title||'')}" oninput="musicImportDraft.items[${i}].title=this.value">`:'<b>PAUSE</b>'}</td><td><input class="music-time-input" value="${musicDurationText(x.duration_sec)}" onblur="musicImportDraft.items[${i}].duration_sec=parseMusicDuration(this.value);this.value=musicDurationText(musicImportDraft.items[${i}].duration_sec);refreshMusicStats()"></td><td>${x.confidence!=null&&x.confidence<.8?'<span class="music-review">Kontrollera</span>':'<span class="music-ok">OK</span>'}</td><td><button class="iconbtn small danger" onclick="removeMusicItem(${i})">×</button></td></tr>`;
+}
+function showMusicImportPreview(){
+  if(!musicImportDraft){showMusicImport();return}
+  setBrand('FRISKIS TRAINING PLAYER','MUSIC IMPORT v0.1');setHomeButton(true);const c=musicCounts(musicImportDraft.items);
+  app.innerHTML=`${userTools()}<div class="music-import-shell wide"><div class="music-step">2 AV 3 · GRANSKA</div><div class="toprow"><div><h1>${escAttr(musicImportDraft.title)}</h1><div class="muted">Kontrollera AI-tolkningen innan passet skapas.${musicImportDraft.deduplicated_count?` · ${musicImportDraft.deduplicated_count} överlappande poster togs bort.`:''}</div></div><div id="musicStats" class="music-stats"><b>${c.tracks} låtar</b><span>${c.pauses} pauser</span><span>${fmt(c.total)}</span></div></div>
+  <div class="music-preview-table"><table class="admin-table"><thead><tr><th>#</th><th>Typ</th><th>Artist</th><th>Titel</th><th>Tid</th><th>Status</th><th></th></tr></thead><tbody>${musicImportDraft.items.map(musicPreviewRow).join('')}</tbody></table></div>
+  <div class="music-preview-actions"><button onclick="addMusicItem('track')">+ LÅT</button><button onclick="addMusicItem('pause')">+ PAUSE</button><span class="spacer"></span><button onclick="showMusicImport()">TILLBAKA</button><button class="primary" onclick="createPassFromMusic()">SKAPA PASS</button></div></div>`;
+}
+function refreshMusicStats(){const el=document.querySelector('#musicStats');if(!el)return;const c=musicCounts(musicImportDraft.items);el.innerHTML=`<b>${c.tracks} låtar</b><span>${c.pauses} pauser</span><span>${fmt(c.total)}</span>`}
+function removeMusicItem(i){musicImportDraft.items.splice(i,1);showMusicImportPreview()}
+function addMusicItem(type){musicImportDraft.items.push({_id:crypto.randomUUID(),type,artist:'',title:'',duration_sec:type==='pause'?10:180,confidence:1});showMusicImportPreview()}
+function buildWorkoutPartsFromMusic(items,timelineIds){
+  const hasPauses=items.some(x=>x.type==='pause'),parts=[],first=intensityValues({intensity_model_id:registries.models.find(x=>x.code==='borg')?.id})[0];
+  const base=()=>({id:Date.now()+Math.random(),time:'2:00',borg:12,intensity:first?.code||'',moment:'',instruction:'',music_refs:[],music_labels:[]});
+  if(!hasPauses){
+    items.forEach((x,i)=>{if(x.type!=='track')return;const p=base();p.time=fmt(x.duration_sec);p.music_refs=[timelineIds[i]];p.music_labels=[`${x.artist?x.artist+' – ':''}${x.title||'Okänd låt'}`];parts.push(p)});
+    return parts;
+  }
+  let group=base(),groupSeconds=0;
+  const flush=()=>{if(!groupSeconds)return;group.time=fmt(groupSeconds);parts.push(group);group=base();groupSeconds=0};
+  items.forEach((x,i)=>{
+    if(x.type==='pause'){
+      flush();const p=base();p.time=fmt(x.duration_sec);p.borg=9;p.moment='Paus';p.instruction='';p.music_refs=[timelineIds[i]];p.music_labels=[`PAUSE · ${fmt(x.duration_sec)}`];parts.push(p);return;
+    }
+    groupSeconds+=+x.duration_sec||0;group.music_refs.push(timelineIds[i]);group.music_labels.push(`${x.artist?x.artist+' – ':''}${x.title||'Okänd låt'}`);
+  });flush();return parts;
+}
+async function createPassFromMusic(){
+  if(!isSuper()||!musicImportDraft)return;
+  const items=musicImportDraft.items.map((x,i)=>({...x,order:i+1,duration_sec:+x.duration_sec||0}));
+  if(!items.length||items.some(x=>x.duration_sec<=0)){alert('Alla rader måste ha en giltig tid.');return}
+  const importId=crypto.randomUUID(),timelineIds=items.map(()=>crypto.randomUUID()),trackIds=items.map(x=>x.type==='track'?crypto.randomUUID():null);
+  const starts=[];let cursor=0;items.forEach(x=>{starts.push(cursor);cursor+=x.duration_sec});
+  try{
+    await api('music_imports',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify({id:importId,created_by:auth.user.id,source:'fitnessplayer_screenshot',source_title:musicImportDraft.title,status:'approved',screenshot_count:musicImportDraft.screenshot_count||0})});
+    const tracks=items.map((x,i)=>x.type==='track'?{id:trackIds[i],import_id:importId,artist:x.artist||'',title:x.title||'',duration_sec:x.duration_sec,sort_order:i+1,confidence:x.confidence??null}:null).filter(Boolean);
+    if(tracks.length)await api('music_tracks',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(tracks)});
+    const timeline=items.map((x,i)=>({id:timelineIds[i],import_id:importId,type:x.type,track_id:trackIds[i],duration_sec:x.duration_sec,sort_order:i+1,start_sec:starts[i],end_sec:starts[i]+x.duration_sec,source_screenshot:x.source_screenshot||null,source_order:x.source_order||null,confidence:x.confidence??null}));
+    await api('music_timeline_items',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(timeline)});
+    const spin=registries.activities.find(x=>x.code==='spinning')||registries.activities[0],borg=registries.models.find(x=>x.code==='borg')||registries.models[0];
+    const parts=buildWorkoutPartsFromMusic(items,timelineIds);if(!parts.length)throw new Error('Musiklistan innehåller inga låtar att skapa pass från.');
+    const passDraft={id:null,name:musicImportDraft.title,parts,owner_id:auth.user.id,visibility:'private',activity_type_id:spin?.id||null,intensity_model_id:borg?.id||null,remote:false,music_import:{id:importId,title:musicImportDraft.title,track_count:items.filter(x=>x.type==='track').length,pause_count:items.filter(x=>x.type==='pause').length,total_sec:cursor}};
+    const saved=await upsertPass(passDraft,true);
+    await api('pass_music',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify({pass_id:saved.id,import_id:importId})});
+    saved.music_import=passDraft.music_import;passes.unshift(saved);cache();musicImportDraft=null;active={p:structuredClone(saved),i:0};drawEdit();
+  }catch(e){console.error(e);alert('Kunde inte skapa passet: '+e.message)}
 }
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
@@ -597,7 +700,7 @@ function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_
 function list(){
   stop(); setAppBrand(); setHomeButton(false);
   const legacyCount=passes.filter(p=>p.legacyLocal).length;
-  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div>
+  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><div class="toprow-actions">${isSuper()?`<button onclick="showMusicImport()">🎵 SKAPA PASS FRÅN MUSIKLISTA</button>`:''}<button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div></div>
   ${legacyCount?`<div class="legacy-banner"><b>${legacyCount} äldre lokalt ${legacyCount===1?'pass':'sparade pass'} hittades.</b> Flytta ${legacyCount===1?'det':'dem'} till Mina Pass så sparas ${legacyCount===1?'det':'de'} centralt som Privat.</div>`:''}
   <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${escAttr(p.name)}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span>${p.builtIn?`<span class="badge">Demo</span>`:`<span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span>`}${auth&&p.remote?`<span class="badge ownerbadge">👤 ${escAttr(ownerName(p))}</span>`:''}</div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div>${p.legacyLocal?`<div class="pass-storage legacy"><i></i>Äldre lokalt pass · flytta till Mina Pass</div>`:p.remote?`<div class="pass-storage remote"><i></i>Centralt sparat</div>`:''}${bars(p)}
   <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${p.legacyLocal?`${auth?`<button onclick="importLocalPass(${i})">SPARA SOM PRIVAT</button>`:`<button onclick="login()">LOGGA IN FÖR ATT SPARA</button>`}`:auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&(p.remote||p.builtIn)?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
@@ -627,16 +730,17 @@ function drawEdit(focus=null){
   const pageTitle=active.i==null?'Skapa nytt pass':'Redigera pass';
   app.innerHTML=`<div class="editor-head"><div><h1>${pageTitle}</h1><div class="muted">Direktredigera tabellen. Moment och beskrivning har förslag men tillåter egen text.</div></div></div><div class="editor">
   <input class="name" id="pname" value="${escAttr(p.name)}" oninput="active.p.name=this.value">
+  ${p.music_import?`<div class="music-editor-summary"><span>🎵</span><div><b>${escAttr(p.music_import.title||'Importerad musiklista')}</b><small>${p.music_import.track_count||0} låtar${p.music_import.pause_count?` · ${p.music_import.pause_count} pauser`:''} · ${fmt(p.music_import.total_sec||0)}</small></div></div>`:''}
   <div class="meta-grid"><div class="field"><label>Aktivitet</label><select onchange="active.p.activity_type_id=this.value;drawEdit()">${registries.activities.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.activity_type_id?'selected':''}>${x.name}</option>`).join('')}</select></div><div class="field"><label>Intensitetsmodell</label><select onchange="active.p.intensity_model_id=this.value;const v=intensityValues(active.p)[0];if(v)active.p.parts.forEach(x=>x.intensity=v.code);drawEdit()">${registries.models.filter(x=>x.is_active!==false).map(x=>`<option value="${x.id}" ${x.id===p.intensity_model_id?'selected':''}>${x.name}</option>`).join('')}</select></div>${isSuper()?`<div class="field owner-field"><label>Ägare</label><select onchange="active.p.owner_id=this.value">${profiles.filter(x=>x.is_active!==false).map(x=>`<option value="${x.user_id}" ${x.user_id===p.owner_id?'selected':''}>${escAttr(x.display_name||'Användare')} · ${roleLabel(x.role)}</option>`).join('')}</select></div>`:`<div class="field owner-field"><label>Ägare</label><div class="readonly-field">${escAttr(ownerName(p))}</div></div>`}</div>
   <div class="visibility"><b>Synlighet:</b><label><input type="radio" name="vis" ${p.visibility!=='private'?'checked':''} onchange="active.p.visibility='public'"> 🌐 Publikt</label><label><input type="radio" name="vis" ${p.visibility==='private'?'checked':''} onchange="active.p.visibility='private'"> 🔒 Privat</label></div>
   ${bars(p,'profile editor-profile')}
   <div class="row row-head"><span>#</span><span>Tid</span><span>Intensitet</span><span>Moment</span><span>Beskrivning</span><span></span></div>
-  <div id="rows">${p.parts.map((x,j)=>`${j>0?`<div class="insert-block"><button type="button" onclick="insertPartAt(${j})">＋ Infoga block</button></div>`:''}<div class="row editor-block" data-row="${j}" ondragover="blockDragOver(event,${j})" ondragleave="blockDragLeave(event)" ondrop="blockDrop(event,${j})"><b>${j+1}</b>
+  <div id="rows">${p.parts.map((x,j)=>`${j>0?`<div class="insert-block"><button type="button" onclick="insertPartAt(${j})">＋ Infoga block</button></div>`:''}${x.music_labels?.length?`<div class="music-block-label"><span>🎵</span><span>${x.music_labels.map(escAttr).join(' · ')}</span></div>`:''}<div class="row editor-block" data-row="${j}" ondragover="blockDragOver(event,${j})" ondragleave="blockDragLeave(event)" ondrop="blockDrop(event,${j})"><b>${j+1}</b>
   <input data-field="time" value="${escAttr(x.time)}" oninput="setPart(${j},'time',this.value)" onkeydown="editorKey(event,${j},'time')">
   ${isBorg?`<select data-field="borg" class="borginput" onchange="setPart(${j},'borg',this.value);this.style.background=color(this.value);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${color(x.borg)}">${registries.values.filter(v=>v.intensity_model_id===p.intensity_model_id&&v.is_active!==false).map(v=>`<option value="${v.numeric_value}" ${+v.numeric_value===+x.borg?'selected':''}>${v.label}</option>`).join('')||Array.from({length:15},(_,k)=>`<option value="${k+6}" ${k+6===+x.borg?'selected':''}>${k+6}</option>`).join('')}</select>`:`<select data-field="borg" class="borginput" onchange="setPart(${j},'intensity',this.value);this.style.background=intensityColor(active.p,active.p.parts[${j}]);refreshProfile()" onkeydown="editorKey(event,${j},'borg')" style="background:${intensityColor(p,x)}">${intensityValues(p).map(v=>`<option value="${escAttr(v.code)}" ${v.code===(x.intensity||intensityValues(p)[0]?.code)?'selected':''}>${escAttr(v.label)}${v.min_value!=null||v.max_value!=null?' · '+(v.min_value==null?'≤'+v.max_value:v.max_value==null?'>'+v.min_value:v.min_value+'–'+v.max_value)+' '+escAttr(model?.unit_label||''):''}</option>`).join('')}</select>`}
   ${comboField('moment',j,x.moment,'Moment','moments')}
   ${comboField('instruction',j,x.instruction,'Beskrivning','descriptions','instruction')}
-  <div class="rowtools"><button type="button" class="iconbtn small drag-handle" title="Dra för att flytta block" aria-label="Dra för att flytta block" draggable="true" ondragstart="blockDragStart(event,${j})" ondragend="blockDragEnd(event)" onpointerdown="blockPointerStart(event,${j})" onpointermove="blockPointerMove(event)" onpointerup="blockPointerEnd(event)" onpointercancel="blockPointerCancel(event)">⋮⋮</button><button class="iconbtn small" title="Duplicera block" onclick="duplicatePart(${j})">⧉</button><button class="iconbtn small danger" title="Ta bort block" onclick="removePart(${j})">×</button></div></div>`).join('')}</div>
+  <div class="rowtools"><button type="button" class="iconbtn small drag-handle" title="Dra för att flytta block" aria-label="Dra för att flytta block" draggable="true" ondragstart="blockDragStart(event,${j})" ondragend="blockDragEnd(event)" onpointerdown="blockPointerStart(event,${j})" onpointermove="blockPointerMove(event)" onpointerup="blockPointerEnd(event)" onpointercancel="blockPointerCancel(event)">⋮⋮</button>${j<p.parts.length-1?`<button class="iconbtn small" title="Slå ihop med nästa block" onclick="mergePartWithNext(${j})">⇥</button>`:''}<button class="iconbtn small" title="Duplicera block" onclick="duplicatePart(${j})">⧉</button><button class="iconbtn small danger" title="Ta bort block" onclick="removePart(${j})">×</button></div></div>`).join('')}</div>
   <div class="editor-actions-sticky"><div class="editor-total"><b>Total tid: <span id="editorTotal">${fmt(total(p))}</span></b></div><div class="actions editor-actions"><button onclick="addPart(null,true)">+ LÄGG TILL BLOCK</button><button onclick="preview()">▶ PROVKÖR</button><button class="primary" onclick="saveEdit()">SPARA PASS</button></div></div></div>`;
   if(focus) requestAnimationFrame(()=>focusEditor(focus.row,focus.field));
 }
@@ -661,6 +765,17 @@ function refreshProfile(){const el=document.querySelector('.editor-profile');if(
 function focusEditor(row,field='time'){const el=document.querySelector(`.row[data-row="${row}"] [data-field="${field}"]`);if(el){el.focus();if(el.select)el.select()}}
 function addPart(after=null,focus=false){const first=intensityValues(active.p)[0];const part={id:Date.now()+Math.random(),time:'2:00',borg:12,intensity:first?.code||'',moment:'',instruction:''};if(after==null)active.p.parts.push(part);else active.p.parts.splice(after+1,0,part);drawEdit(focus?{row:after==null?active.p.parts.length-1:after+1,field:'time'}:null)}
 function duplicatePart(i){const c=structuredClone(active.p.parts[i]);c.id=Date.now()+Math.random();active.p.parts.splice(i+1,0,c);drawEdit({row:i+1,field:'time'})}
+function mergePartWithNext(i){
+  if(!active?.p?.parts?.[i]||!active.p.parts[i+1])return;
+  const a=active.p.parts[i],b=active.p.parts[i+1];
+  a.time=fmt(sec(a.time)+sec(b.time));
+  a.music_refs=[...(a.music_refs||[]),...(b.music_refs||[])];
+  a.music_labels=[...(a.music_labels||[]),...(b.music_labels||[])];
+  if(!a.moment&&b.moment)a.moment=b.moment;
+  if(!a.instruction&&b.instruction)a.instruction=b.instruction;
+  active.p.parts.splice(i+1,1);
+  drawEdit({row:i,field:'time'});
+}
 function removePart(i){if(active.p.parts.length>1){active.p.parts.splice(i,1);drawEdit({row:Math.min(i,active.p.parts.length-1),field:'time'})}}
 function insertPartAt(index){
   const first=intensityValues(active.p)[0];

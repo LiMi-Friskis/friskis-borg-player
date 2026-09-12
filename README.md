@@ -1,13 +1,20 @@
-# Friskis Training Player — Prototype 2.3.4
+# Friskis Training Player – Music Import v0.1
 
-Hotfix för utgångna inloggningssessioner.
+Parallellt utvecklingsspår ovanpå stabila Prototype 2.3.4.
 
-- access token förnyas automatiskt med Supabase refresh token innan den går ut
-- om PostgREST ändå svarar med `JWT expired` / `PGRST303` förnyas sessionen och anropet görs om en gång
-- om sessionen inte längre kan förnyas visas ett begripligt meddelande om att logga in igen, i stället för rått JWT-fel
-- övrig funktionalitet från 2.3.3 är oförändrad
+Music Import v0.1:
+- endast Super User
+- 1–10 FitnessPlayer-screenshots
+- OpenAI bildtolkning via Supabase Edge Function
+- deterministisk deduplicering av överlapp mellan screenshots
+- redigerbar förhandsgranskning
+- separat MusicTrack / MusicTimeline-datamodell
+- PAUSE sparas som eget tidssegment
+- pass skapas som Privat och öppnas direkt i den vanliga passeditorn
+- om PAUSE finns grupperas låtarna mellan pauser till första blockutkast; PAUSE blir ett redigerbart pausblock
+- utan PAUSE skapas initialt ett block per låt
+- vanliga passeditorn har även “Slå ihop med nästa block” för fortsatt bearbetning
 
-Ingen SQL.
-Ingen Edge Function.
+Ingen OpenAI-nyckel ligger i webbläsaren eller GitHub.
 
 © 2026 LiMi Equus AB. Alla rättigheter förbehållna.
