@@ -1,20 +1,13 @@
-# Friskis Training Player – Music Import v0.1
+# Friskis Training Player — Prototype 2.4.2 · Music Import v0.1.2
 
-Parallellt utvecklingsspår ovanpå stabila Prototype 2.4.1.
+Ändringar i denna version:
+- screenshot-import går direkt till Redigera pass efter AI-analys
+- låttitel + artist läggs i blockets Beskrivning
+- passnamn hämtas från FitnessPlayer-listans namn när det är synligt
+- dublettnamn får automatiskt suffix `_2`, `_3`, osv.
+- MusicTrack/MusicTimeline ligger fortsatt separat från WorkoutBlock
 
-Music Import v0.1:
-- endast Super User
-- 1–10 FitnessPlayer-screenshots
-- OpenAI bildtolkning via Supabase Edge Function
-- deterministisk deduplicering av överlapp mellan screenshots
-- redigerbar förhandsgranskning
-- separat MusicTrack / MusicTimeline-datamodell
-- PAUSE sparas som eget tidssegment
-- pass skapas som Privat och öppnas direkt i den vanliga passeditorn
-- om PAUSE finns grupperas låtarna mellan pauser till första blockutkast; PAUSE blir ett redigerbart pausblock
-- utan PAUSE skapas initialt ett block per låt
-- vanliga passeditorn har även “Slå ihop med nästa block” för fortsatt bearbetning
-
-Ingen OpenAI-nyckel ligger i webbläsaren eller GitHub.
-
-© 2026 LiMi Equus AB. Alla rättigheter förbehållna.
+## Deploy
+1. Ersätt webbfilerna i `main`.
+2. Deploya Edge Function `music-import` igen eftersom prompten för listnamn har förbättrats.
+3. Ingen ny SQL behövs.

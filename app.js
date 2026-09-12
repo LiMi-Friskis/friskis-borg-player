@@ -38,8 +38,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.4.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.4.1')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.4.2'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.4.2')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -284,7 +284,7 @@ async function analyzeMusicScreenshots(){
     const images=[];for(let i=0;i<files.length;i++)images.push({name:files[i].name,data_url:await optimizedImageDataUrl(files[i])});
     const data=await musicImportEdge({title_hint:'',images});
     musicImportDraft={title:data.source_title||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
-    showMusicImportPreview();
+    await createPassFromMusic();
   }catch(e){alert('Kunde inte analysera musiklistan: '+e.message);btn.disabled=false;btn.textContent='ANALYSERA MUSIKLISTA'}
 }
 function musicPreviewRow(x,i){
@@ -300,21 +300,37 @@ function showMusicImportPreview(){
 function refreshMusicStats(){const el=document.querySelector('#musicStats');if(!el)return;const c=musicCounts(musicImportDraft.items);el.innerHTML=`<b>${c.tracks} låtar</b><span>${c.pauses} pauser</span><span>${fmt(c.total)}</span>`}
 function removeMusicItem(i){musicImportDraft.items.splice(i,1);showMusicImportPreview()}
 function addMusicItem(type){musicImportDraft.items.push({_id:crypto.randomUUID(),type,artist:'',title:'',duration_sec:type==='pause'?10:180,confidence:1});showMusicImportPreview()}
+function musicTrackDescription(x){
+  const title=String(x?.title||'').trim(),artist=String(x?.artist||'').trim();
+  if(title&&artist)return `${title} – ${artist}`;
+  return title||artist||'Okänd låt';
+}
 function buildWorkoutPartsFromMusic(items,timelineIds){
   const hasPauses=items.some(x=>x.type==='pause'),parts=[],first=intensityValues({intensity_model_id:registries.models.find(x=>x.code==='borg')?.id})[0];
   const base=()=>({id:Date.now()+Math.random(),time:'2:00',borg:12,intensity:first?.code||'',moment:'',instruction:'',music_refs:[],music_labels:[]});
   if(!hasPauses){
-    items.forEach((x,i)=>{if(x.type!=='track')return;const p=base();p.time=fmt(x.duration_sec);p.music_refs=[timelineIds[i]];p.music_labels=[`${x.artist?x.artist+' – ':''}${x.title||'Okänd låt'}`];parts.push(p)});
+    items.forEach((x,i)=>{if(x.type!=='track')return;const p=base();p.time=fmt(x.duration_sec);const label=musicTrackDescription(x);p.instruction=label;p.music_refs=[timelineIds[i]];p.music_labels=[label];parts.push(p)});
     return parts;
   }
-  let group=base(),groupSeconds=0;
-  const flush=()=>{if(!groupSeconds)return;group.time=fmt(groupSeconds);parts.push(group);group=base();groupSeconds=0};
+  let group=base(),groupSeconds=0,descriptions=[];
+  const flush=()=>{if(!groupSeconds)return;group.time=fmt(groupSeconds);group.instruction=descriptions.join(' · ');parts.push(group);group=base();groupSeconds=0;descriptions=[]};
   items.forEach((x,i)=>{
     if(x.type==='pause'){
-      flush();const p=base();p.time=fmt(x.duration_sec);p.borg=9;p.moment='Paus';p.instruction='';p.music_refs=[timelineIds[i]];p.music_labels=[`PAUSE · ${fmt(x.duration_sec)}`];parts.push(p);return;
+      flush();const p=base();p.time=fmt(x.duration_sec);p.borg=9;p.moment='Paus';p.instruction='PAUSE';p.music_refs=[timelineIds[i]];p.music_labels=[`PAUSE · ${fmt(x.duration_sec)}`];parts.push(p);return;
     }
-    groupSeconds+=+x.duration_sec||0;group.music_refs.push(timelineIds[i]);group.music_labels.push(`${x.artist?x.artist+' – ':''}${x.title||'Okänd låt'}`);
+    const label=musicTrackDescription(x);groupSeconds+=+x.duration_sec||0;group.music_refs.push(timelineIds[i]);group.music_labels.push(label);descriptions.push(label);
   });flush();return parts;
+}
+async function uniqueImportedPassName(baseName){
+  const base=String(baseName||'Importerad musiklista').trim()||'Importerad musiklista';
+  const names=new Set((passes||[]).map(p=>String(p.name||'').trim()));
+  try{
+    const rows=await api('passes?select=name');
+    (rows||[]).forEach(r=>names.add(String(r.name||'').trim()));
+  }catch(e){console.warn('Kunde inte kontrollera passnamn centralt',e)}
+  if(!names.has(base))return base;
+  let n=2;while(names.has(`${base}_${n}`))n++;
+  return `${base}_${n}`;
 }
 async function createPassFromMusic(){
   if(!isSuper()||!musicImportDraft)return;
@@ -330,7 +346,8 @@ async function createPassFromMusic(){
     await api('music_timeline_items',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(timeline)});
     const spin=registries.activities.find(x=>x.code==='spinning')||registries.activities[0],borg=registries.models.find(x=>x.code==='borg')||registries.models[0];
     const parts=buildWorkoutPartsFromMusic(items,timelineIds);if(!parts.length)throw new Error('Musiklistan innehåller inga låtar att skapa pass från.');
-    const passDraft={id:null,name:musicImportDraft.title,parts,owner_id:auth.user.id,visibility:'private',activity_type_id:spin?.id||null,intensity_model_id:borg?.id||null,remote:false,music_import:{id:importId,title:musicImportDraft.title,track_count:items.filter(x=>x.type==='track').length,pause_count:items.filter(x=>x.type==='pause').length,total_sec:cursor}};
+    const passName=await uniqueImportedPassName(musicImportDraft.title);
+    const passDraft={id:null,name:passName,parts,owner_id:auth.user.id,visibility:'private',activity_type_id:spin?.id||null,intensity_model_id:borg?.id||null,remote:false,music_import:{id:importId,title:musicImportDraft.title,track_count:items.filter(x=>x.type==='track').length,pause_count:items.filter(x=>x.type==='pause').length,total_sec:cursor}};
     const saved=await upsertPass(passDraft,true);
     await api('pass_music',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify({pass_id:saved.id,import_id:importId})});
     saved.music_import=passDraft.music_import;passes.unshift(saved);cache();musicImportDraft=null;active={p:structuredClone(saved),i:0};drawEdit();
@@ -339,7 +356,7 @@ async function createPassFromMusic(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.4.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.4.2</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
