@@ -21,6 +21,9 @@ type Props = {
 const HEART_RATE_SERVICE = "180D";
 const HEART_RATE_MEASUREMENT = "2A37";
 
+const FTMS_SERVICE = "1826";
+const TREADMILL_DATA = "2ACD";
+
 type ActivityState =
   | "idle"
   | "recording"
@@ -42,6 +45,21 @@ export default function IndoorWalkingView({
         : "not-connected"
     );
 
+  const [speedKmh, setSpeedKmh] =
+    useState<number | null>(null);
+
+  const [distanceKm, setDistanceKm] =
+    useState<number | null>(null);
+
+  const [ftmsStatus, setFtmsStatus] =
+    useState<
+      "not-connected" | "connecting" | "connected" | "error"
+    >(
+      setup.equipment
+        ? "connecting"
+        : "not-connected"
+    );
+
   const [activityState, setActivityState] =
     useState<ActivityState>("idle");
 
@@ -49,6 +67,9 @@ export default function IndoorWalkingView({
     useState(0);
 
   const heartRateSubscription =
+    useRef<Subscription | null>(null);
+
+  const ftmsSubscription =
     useRef<Subscription | null>(null);
 
   const activityTimer =
@@ -76,16 +97,7 @@ export default function IndoorWalkingView({
             deviceId
           );
 
-        console.log(
-          "HR device connected before monitor:",
-          connected
-        );
-
         if (!connected) {
-          console.log(
-            "Reconnecting HR device..."
-          );
-
           await setup.manager.connectToDevice(
             deviceId
           );
@@ -117,50 +129,28 @@ export default function IndoorWalkingView({
                 return;
               }
 
-              try {
-                const bytes =
-                  Uint8Array.from(
-                    atob(characteristic.value),
-                    (c) =>
-                      c.charCodeAt(0)
-                  );
-
-                if (bytes.length < 2) {
-                  return;
-                }
-
-                const flags =
-                  bytes[0];
-
-                const is16Bit =
-                  (flags & 0x01) !== 0;
-
-                let bpm: number;
-
-                if (is16Bit) {
-                  if (bytes.length < 3) {
-                    return;
-                  }
-
-                  bpm =
-                    bytes[1] |
-                    (bytes[2] << 8);
-                } else {
-                  bpm = bytes[1];
-                }
-
-                console.log(
-                  "Heart rate:",
-                  bpm
+              const bytes =
+                Uint8Array.from(
+                  atob(characteristic.value),
+                  (c) =>
+                    c.charCodeAt(0)
                 );
 
-                setHeartRate(bpm);
-              } catch (decodeError) {
-                console.log(
-                  "Heart rate decode error:",
-                  decodeError
-                );
+              if (bytes.length < 2) {
+                return;
               }
+
+              const flags = bytes[0];
+              const is16Bit =
+                (flags & 0x01) !== 0;
+
+              const bpm =
+                is16Bit
+                  ? bytes[1] |
+                    (bytes[2] << 8)
+                  : bytes[1];
+
+              setHeartRate(bpm);
             }
           );
       } catch (error) {
@@ -180,6 +170,136 @@ export default function IndoorWalkingView({
     };
   }, [
     setup.heartRateDevice,
+    setup.manager,
+  ]);
+
+  useEffect(() => {
+    const startFtms = async () => {
+      if (!setup.equipment) {
+        setFtmsStatus("not-connected");
+        return;
+      }
+
+      const deviceId =
+        setup.equipment.device.id;
+
+      try {
+        setFtmsStatus("connecting");
+
+        ftmsSubscription.current?.remove();
+
+        let connected =
+          await setup.manager.isDeviceConnected(
+            deviceId
+          );
+
+        if (!connected) {
+          await setup.manager.connectToDevice(
+            deviceId
+          );
+        }
+
+        await setup.manager.discoverAllServicesAndCharacteristicsForDevice(
+          deviceId
+        );
+
+        setFtmsStatus("connected");
+
+        ftmsSubscription.current =
+          setup.manager.monitorCharacteristicForDevice(
+            deviceId,
+            FTMS_SERVICE,
+            TREADMILL_DATA,
+            (error, characteristic) => {
+              if (error) {
+                console.log(
+                  "FTMS monitor error:",
+                  error
+                );
+
+                setFtmsStatus("error");
+                return;
+              }
+
+              if (!characteristic?.value) {
+                return;
+              }
+
+              const bytes =
+                Uint8Array.from(
+                  atob(characteristic.value),
+                  (c) =>
+                    c.charCodeAt(0)
+                );
+
+              if (bytes.length < 4) {
+                return;
+              }
+
+              // FTMS Treadmill Data
+              // Flags: 2 bytes, little endian
+              const flags =
+                bytes[0] |
+                (bytes[1] << 8);
+
+              let offset = 2;
+
+              // Instantaneous Speed
+              // uint16, 0.01 km/h
+              const rawSpeed =
+                bytes[offset] |
+                (bytes[offset + 1] << 8);
+
+              setSpeedKmh(
+                rawSpeed / 100
+              );
+
+              offset += 2;
+
+              // Average Speed present
+              if (
+                (flags & (1 << 1)) !== 0
+              ) {
+                offset += 2;
+              }
+
+              // Total Distance present
+              if (
+                (flags & (1 << 2)) !== 0 &&
+                bytes.length >=
+                  offset + 3
+              ) {
+                const rawDistance =
+                  bytes[offset] |
+                  (bytes[offset + 1] << 8) |
+                  (bytes[offset + 2] << 16);
+
+                // FTMS Total Distance = meters
+                setDistanceKm(
+                  rawDistance / 1000
+                );
+
+                offset += 3;
+              }
+            }
+          );
+      } catch (error) {
+        console.log(
+          "Could not start FTMS:",
+          error
+        );
+
+        setFtmsStatus("error");
+      }
+    };
+
+    startFtms();
+
+    return () => {
+      ftmsSubscription.current?.remove();
+    };
+  }, [
+    setup.equipment,
     setup.manager,
   ]);
 
@@ -217,44 +337,21 @@ export default function IndoorWalkingView({
   const startTraining = () => {
     setElapsedSeconds(0);
     setActivityState("recording");
-
-    console.log(
-      "Indoor Walking started"
-    );
   };
 
   const stopTraining = () => {
     setActivityState("finished");
-
-    console.log(
-      "Indoor Walking stopped"
-    );
   };
 
   const formatTime = (
     totalSeconds: number
   ) => {
-    const hours = Math.floor(
-      totalSeconds / 3600
-    );
-
     const minutes = Math.floor(
-      (totalSeconds % 3600) /
-        60
+      totalSeconds / 60
     );
 
     const seconds =
       totalSeconds % 60;
-
-    if (hours > 0) {
-      return `${String(
-        hours
-      ).padStart(2, "0")}:${String(
-        minutes
-      ).padStart(2, "0")}:${String(
-        seconds
-      ).padStart(2, "0")}`;
-    }
 
     return `${String(
       minutes
@@ -314,6 +411,32 @@ export default function IndoorWalkingView({
             : "Ingen pulsmätare ansluten"}
         </Text>
 
+        {equipmentName && (
+          <Text
+            style={[
+              styles.connectionStatus,
+              ftmsStatus ===
+                "connected" &&
+                styles.statusConnected,
+              ftmsStatus ===
+                "error" &&
+                styles.statusError,
+            ]}
+          >
+            {ftmsStatus ===
+              "connecting" &&
+              "Ansluter till maskin..."}
+
+            {ftmsStatus ===
+              "connected" &&
+              "● Maskin ansluten"}
+
+            {ftmsStatus ===
+              "error" &&
+              "Kunde inte läsa maskindata"}
+          </Text>
+        )}
+
         {pulseDeviceName && (
           <Text
             style={[
@@ -343,22 +466,16 @@ export default function IndoorWalkingView({
         {activityState !==
           "idle" && (
           <View
-            style={
-              styles.timerArea
-            }
+            style={styles.timerArea}
           >
             <Text
-              style={
-                styles.timerLabel
-              }
+              style={styles.timerLabel}
             >
               TRÄNINGSTID
             </Text>
 
             <Text
-              style={
-                styles.timerValue
-              }
+              style={styles.timerValue}
             >
               {formatTime(
                 elapsedSeconds
@@ -379,11 +496,19 @@ export default function IndoorWalkingView({
           </Text>
 
           <Text style={styles.value}>
-            🏃 -- km/h
+            🏃{" "}
+            {speedKmh !== null
+              ? speedKmh.toFixed(1)
+              : "--"}{" "}
+            km/h
           </Text>
 
           <Text style={styles.value}>
-            📏 -- km
+            📏{" "}
+            {distanceKm !== null
+              ? distanceKm.toFixed(2)
+              : "--"}{" "}
+            km
           </Text>
 
           <Text style={styles.value}>
@@ -397,12 +522,8 @@ export default function IndoorWalkingView({
         {activityState !==
           "recording" ? (
           <Pressable
-            style={
-              styles.startButton
-            }
-            onPress={
-              startTraining
-            }
+            style={styles.startButton}
+            onPress={startTraining}
           >
             <Text
               style={
@@ -417,12 +538,8 @@ export default function IndoorWalkingView({
           </Pressable>
         ) : (
           <Pressable
-            style={
-              styles.stopButton
-            }
-            onPress={
-              stopTraining
-            }
+            style={styles.stopButton}
+            onPress={stopTraining}
           >
             <Text
               style={
@@ -441,9 +558,7 @@ export default function IndoorWalkingView({
         </Text>
 
         <Pressable
-          style={
-            styles.sessionButton
-          }
+          style={styles.sessionButton}
         >
           <Text
             style={
