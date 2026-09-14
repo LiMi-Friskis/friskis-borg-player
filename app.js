@@ -25,6 +25,8 @@ const shortDemo={id:'demo-short',name:'Kort demo – 8 min',parts:[
 ].map((x,i)=>({id:'s'+(i+1),time:x[0],borg:x[1],moment:x[2],instruction:x[3]}))};
 
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
+let liveSession=null;
+let clockBaseMs=0, clockAnchorLocalMs=null;
 let musicImportDraft=null;
 let liveView=localStorage.getItem('friskis-live-view')||'clean';
 let cueKey='', prestartTimer=null;
@@ -38,8 +40,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.4.2'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.4.2')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.5.1 · PRO REALTIME v0.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.5.1 · PRO REALTIME v0.1')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -356,7 +358,7 @@ async function createPassFromMusic(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.4.2</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.5.1 · Pro Realtime v0.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -736,7 +738,7 @@ function list(){
   app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><div class="toprow-actions">${isSuper()?`<button onclick="showMusicImport()">🎵 SKAPA PASS FRÅN MUSIKLISTA</button>`:''}<button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div></div>
   ${legacyCount?`<div class="legacy-banner"><b>${legacyCount} äldre lokalt ${legacyCount===1?'pass':'sparade pass'} hittades.</b> Flytta ${legacyCount===1?'det':'dem'} till Mina Pass så sparas ${legacyCount===1?'det':'de'} centralt som Privat.</div>`:''}
   <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${escAttr(p.name)}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span>${p.builtIn?`<span class="badge">Demo</span>`:`<span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span>`}${auth&&p.remote?`<span class="badge ownerbadge">👤 ${escAttr(ownerName(p))}</span>`:''}</div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div>${p.legacyLocal?`<div class="pass-storage legacy"><i></i>Äldre lokalt pass · flytta till Mina Pass</div>`:p.remote?`<div class="pass-storage remote"><i></i>Centralt sparat</div>`:''}${bars(p)}
-  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${p.legacyLocal?`${auth?`<button onclick="importLocalPass(${i})">SPARA SOM PRIVAT</button>`:`<button onclick="login()">LOGGA IN FÖR ATT SPARA</button>`}`:auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&(p.remote||p.builtIn)?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
+  <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${isSuper()&&p.remote&&!p.legacyLocal?`<button class="pro-button" onclick="runWithPro(${i})">📱 KÖR MED PRO</button>`:''}${p.legacyLocal?`${auth?`<button onclick="importLocalPass(${i})">SPARA SOM PRIVAT</button>`:`<button onclick="login()">LOGGA IN FÖR ATT SPARA</button>`}`:auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&(p.remote||p.builtIn)?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
   setSync(online?'ok':'err',online?'Centralt sparat':'Offline · visar senast synkade pass');
 }
 async function edit(i){
@@ -938,7 +940,110 @@ async function del(i){
   passes.splice(i,1);cache();list();
 }
 
-function run(i){startPlayer(passes[i])}
+function run(i){liveSession=null;startPlayer(passes[i])}
+
+function currentPositionMs(){
+  const max=Math.max(0,total(active?.p||{parts:[]})*1000);
+  const value=running&&clockAnchorLocalMs!=null?clockBaseMs+(Date.now()-clockAnchorLocalMs):clockBaseMs;
+  return Math.max(0,Math.min(max,value||0));
+}
+function applyClockPosition(positionMs,isRunning=running){
+  clockBaseMs=Math.max(0,Math.min(total(active?.p||{parts:[]})*1000,Number(positionMs)||0));
+  clockAnchorLocalMs=isRunning?Date.now():null;
+  elapsed=Math.floor(clockBaseMs/1000);
+}
+function blockIndexAtMs(positionMs){
+  if(!active?.p?.parts?.length)return 0;
+  let pos=Math.max(0,Number(positionMs)||0),acc=0;
+  for(let i=0;i<active.p.parts.length;i++){
+    acc+=sec(active.p.parts[i].time)*1000;
+    if(pos<acc)return i;
+  }
+  return active.p.parts.length-1;
+}
+function snapshotBlock(part,index,p){
+  const m=intensityModel(p),v=intensityValue(p,part);
+  const targets={
+    intensityCode:(!m||m.code==='borg')?String(part.borg??''):String(part.intensity||v?.code||''),
+    intensityLabel:intensityLabel(p,part)||'',
+    intensityValue:(!m||m.code==='borg')?(Number(part.borg)||null):(v?.numeric_value??null),
+    intensityMin:v?.min_value??null,
+    intensityMax:v?.max_value??null,
+    unit:m?.unit_label||''
+  };
+  if(m?.code==='ftp'){targets.ftpMin=v?.min_value??null;targets.ftpMax=v?.max_value??null}
+  return {
+    id:String(part.id??index+1),order:index,name:part.moment||'',durationSec:sec(part.time),
+    description:part.instruction||'',color:intensityColor(p,part),targets
+  };
+}
+function buildPassSnapshot(p){
+  const a=registries.activities.find(x=>x.id===p.activity_type_id),m=intensityModel(p);
+  return {
+    schemaVersion:1,passId:p.id,name:p.name,
+    host:{userId:auth?.user?.id||null,displayName:currentProfile?.display_name||auth?.user?.email||'Instruktör'},
+    activity:{id:p.activity_type_id||null,code:a?.code||null,name:a?.name||activityName(p)},
+    intensityModel:{id:p.intensity_model_id||null,code:m?.code||null,name:m?.name||modelName(p),unit:m?.unit_label||''},
+    totalDurationSec:total(p),blocks:p.parts.map((x,i)=>snapshotBlock(x,i,p))
+  };
+}
+async function createLiveSession(p){
+  if(!isSuper())throw new Error('Kör med Pro är bara tillgängligt för Super Users under piloten.');
+  if(!p?.remote||!p?.id)throw new Error('Passet måste vara centralt sparat innan det kan köras med Pro.');
+  const snapshot=buildPassSnapshot(p);
+  const rows=await api('live_sessions',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify({
+    pass_id:p.id,host_user_id:auth.user.id,status:'ready',current_block_index:0,
+    started_at:null,clock_anchor_at:null,position_ms:0,countdown_ends_at:null,pass_snapshot:snapshot,ended_at:null
+  })});
+  return Array.isArray(rows)?rows[0]:rows;
+}
+async function patchLiveSession(patch){
+  if(!liveSession?.id)return null;
+  const rows=await api('live_sessions?id=eq.'+encodeURIComponent(liveSession.id),{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(patch)});
+  const row=Array.isArray(rows)?rows[0]:rows;
+  if(row)liveSession={...liveSession,...row};else liveSession={...liveSession,...patch};
+  return liveSession;
+}
+async function syncLiveSession(statusOverride=null){
+  if(!liveSession?.id)return;
+  const pos=Math.round(currentPositionMs());
+  const status=statusOverride||liveSession.status||'ready';
+  const anchorIso=new Date().toISOString();
+  const patch={status,current_block_index:blockIndexAtMs(pos),position_ms:pos,updated_at:anchorIso};
+  patch.clock_anchor_at=status==='running'?anchorIso:null;
+  if(status!=='countdown')patch.countdown_ends_at=null;
+  liveSession={...liveSession,...patch};
+  if(status==='running'&&!liveSession.started_at)patch.started_at=patch.clock_anchor_at;
+  if(status==='finished')patch.ended_at=new Date().toISOString();
+  try{await patchLiveSession(patch)}catch(e){console.error('Kunde inte synka Pro-session',e);alert('Pro-sessionen kunde inte synkas. Kontrollera anslutningen innan passet fortsätter.');}
+}
+async function runWithPro(i){
+  if(!isSuper()){alert('Kör med Pro är bara tillgängligt för Super Users under piloten.');return}
+  const p=passes[i];
+  try{
+    liveSession=await createLiveSession(p);
+    stop();active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;running=false;
+    setBrand(p.name,'PRO SESSION · VÄNTAR');setHomeButton(false);
+    app.innerHTML=`<div class="pro-ready"><div class="pro-ready-card"><div class="pro-kicker">TRAINING PLAYER PRO</div><h1>Väntar på start</h1><p class="muted">Deltagarna kan nu öppna Training Player Pro och välja <b>${escAttr(p.name)}</b> i listan över aktiva pass.</p><div class="pro-session-state">SESSION AKTIV · REDO</div><div class="actions" style="justify-content:center"><button class="primary" onclick="startProPass()">▶ STARTA PASS</button><button onclick="cancelLiveSession()">AVBRYT</button></div></div></div>`;
+  }catch(e){console.error(e);alert('Kunde inte skapa Pro-session: '+e.message)}
+}
+function startProPass(){
+  const p=active.p;
+  if(settings.soundPrestart||settings.soundBlock)unlockAudio();
+  setBrand(p.name,'PRO SESSION');setHomeButton(false);
+  applyClockPosition(0,false);running=false;beginPass(settings.prestart||0);
+}
+async function cancelLiveSession(){
+  if(liveSession?.id){try{applyClockPosition(currentPositionMs(),false);await syncLiveSession('finished')}catch{}}
+  liveSession=null;stop();list();
+}
+function proStatusBadge(){
+  if(!liveSession)return '';
+  const status=liveSession.status||'ready';
+  const label=({ready:'REDO',countdown:'STARTAR',running:'KÖR',paused:'PAUS',finished:'AVSLUTAD'})[status]||status.toUpperCase();
+  return `<span class="pro-live-status">PRO · ${label}</span>`;
+}
+
 function unlockAudio(){
  try{
   if(!beep.countdown){
@@ -954,10 +1059,10 @@ function unlockAudio(){
 function startPlayer(p){
  // Lås upp Web Audio direkt i användarens klickhändelse (viktigt i Safari/iPad).
  if(settings.soundPrestart||settings.soundBlock)unlockAudio();
- stop();setBrand(p.name,'');setHomeButton(false);active={p};elapsed=0;
+ stop();setBrand(p.name,'');setHomeButton(false);active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;
  beginPass(settings.prestart||0);
 }
-function beginPass(n){if(n)runPrestart(n);else{saveSession();drawLive()}}
+function beginPass(n){if(n)runPrestart(n);else{running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive()}}
 function beep(freq=880,duration=.11){
  try{
   if(!beep.countdown)unlockAudio();
@@ -971,25 +1076,30 @@ function beep(freq=880,duration=.11){
 }
 function runPrestart(n){
  let left=n;
- const render=()=>app.innerHTML=`<div class="overlay"><div><h2>PASS STARTAR OM</h2><div class="prestart-number ${left<=3?'pulse':''}">${left}</div></div></div>`;
+ if(liveSession){
+   const countdownEndsAt=new Date(Date.now()+n*1000).toISOString();
+   liveSession={...liveSession,status:'countdown',countdown_ends_at:countdownEndsAt,position_ms:0,current_block_index:0,clock_anchor_at:null};
+   void patchLiveSession({status:'countdown',countdown_ends_at:countdownEndsAt,position_ms:0,current_block_index:0,clock_anchor_at:null});
+ }
+ const render=()=>app.innerHTML=`<div class="overlay"><div><h2>PASS STARTAR OM</h2><div class="prestart-number ${left<=3?'pulse':''}">${left}</div>${liveSession?'<div class="pro-countdown-label">TRAINING PLAYER PRO · STARTAR</div>':''}</div></div>`;
  render();
- prestartTimer=setInterval(()=>{left--;if(left<=0){clearInterval(prestartTimer);prestartTimer=null;running=true;saveSession();startTicker();drawLive()}else{if(settings.soundPrestart&&left<=3)beep(left===1?1100:880,left===1?.18:.10);render()}},1000);
+ prestartTimer=setInterval(()=>{left--;if(left<=0){clearInterval(prestartTimer);prestartTimer=null;running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive()}else{if(settings.soundPrestart&&left<=3)beep(left===1?1100:880,left===1?.18:.10);render()}},1000);
 }
 function state(){let p=active.p,c=0;for(let i=0;i<p.parts.length;i++){let d=sec(p.parts[i].time);if(elapsed<c+d)return{i,part:p.parts[i],into:elapsed-c,left:d-(elapsed-c)};c+=d}return{i:p.parts.length-1,part:p.parts.at(-1),into:sec(p.parts.at(-1).time),left:0}}
 function switchView(){liveView=liveView==='clean'?'dashboard':'clean';localStorage.setItem('friskis-live-view',liveView);drawLive()}
-function finishScreen(){stop();clearSession();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
-function restartPass(){elapsed=0;running=false;drawLive()}
+function finishScreen(){if(liveSession){applyClockPosition(total(active.p)*1000,false);void syncLiveSession('finished')}stop();clearSession();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
+function restartPass(){liveSession=null;elapsed=0;running=false;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()}
 function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="confirmFinish()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
 
 
 
-function trainingActions(){return `<div class="training-actions"><button onclick="switchView()">▣ BYT VY</button><button onclick="toggleFullscreen()">⛶ HELSKÄRM</button><button onclick="goHome()">MINA PASS</button></div>`}
+function trainingActions(){return `<div class="training-actions"><div class="training-actions-buttons"><button onclick="switchView()">▣ BYT VY</button><button onclick="toggleFullscreen()">⛶ HELSKÄRM</button><button onclick="goHome()">MINA PASS</button></div>${proStatusBadge()}</div>`}
 async function toggleFullscreen(){try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}catch(e){alert('Helskärm stöds inte fullt ut i den här webbläsaren. Prova Lägg till på hemskärmen på iPad/iPhone.')}}
-function goHome(){stop();clearSession();setHomeButton(false);list()}
+function goHome(){if(liveSession&&liveSession.status!=='finished'){if(!confirm('Det finns en aktiv Pro-session. Vill du avsluta den och gå till Mina Pass?'))return;applyClockPosition(currentPositionMs(),false);void syncLiveSession('finished');liveSession=null}stop();clearSession();setHomeButton(false);list()}
 function saveSession(){if(active&&active.p)localStorage.setItem(SESSION_KEY,JSON.stringify({pass:active.p,elapsed,view:liveView}))}
 function clearSession(){localStorage.removeItem(SESSION_KEY)}
 function checkResume(){try{let x=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!x||!x.pass||x.elapsed<=0||x.elapsed>=total(x.pass))return;stop();active={p:x.pass};elapsed=x.elapsed;liveView=x.view||liveView;setBrand(x.pass.name,'');setHomeButton(false);app.innerHTML=`<div class="resume-box"><h2>Återuppta pass?</h2><p><b>${x.pass.name}</b></p><p class="muted">Sparad position: ${fmt(x.elapsed)}</p><div class="actions"><button class="primary" onclick="resumePass()">ÅTERUPPTA</button><button onclick="restartSaved()">BÖRJA OM</button><button onclick="discardSaved()">MINA PASS</button></div></div>`}catch(e){}}
-function resumePass(){running=false;drawLive()} function restartSaved(){clearSession();elapsed=0;drawLive()} function discardSaved(){clearSession();list()}
+function resumePass(){running=false;clockBaseMs=elapsed*1000;clockAnchorLocalMs=null;drawLive()} function restartSaved(){clearSession();elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()} function discardSaved(){clearSession();list()}
 function confirmFinish(){if(confirm('Vill du avsluta passet?'))finishScreen()}
 function showCue(s){
   let k=s.i+'-'+s.left;
@@ -1006,7 +1116,7 @@ function showCue(s){
     });
   }
 }
-function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;if(elapsed<total(active.p)){elapsed++;saveSession();drawLive()}else finishScreen()},1000)}
+function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;const pos=currentPositionMs();elapsed=Math.floor(pos/1000);if(pos<total(active.p)*1000){saveSession();drawLive()}else finishScreen()},250)}
 
 function drawLive(){
   let p=active.p,T=total(p);
@@ -1116,10 +1226,17 @@ function drawLive(){
     </div>
   </div>`;
 }
-function toggle(){if(running){running=false;if(timer){clearInterval(timer);timer=null}saveSession();drawLive();return}if(elapsed>=total(active.p))elapsed=0;running=true;saveSession();startTicker();drawLive()}
-function stop(){running=false;if(timer){clearInterval(timer);timer=null}}
-function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+sec(x.time),0);elapsed=Math.min(total(active.p),c);drawLive()}
-function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0);elapsed=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);drawLive()}
+function toggle(){
+  if(running){
+    const pos=currentPositionMs();running=false;applyClockPosition(pos,false);if(timer){clearInterval(timer);timer=null}
+    if(liveSession)void syncLiveSession('paused');saveSession();drawLive();return;
+  }
+  if(currentPositionMs()>=total(active.p)*1000)applyClockPosition(0,false);
+  running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive();
+}
+function stop(){if(running)applyClockPosition(currentPositionMs(),false);running=false;if(timer){clearInterval(timer);timer=null}}
+function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+sec(x.time),0);applyClockPosition(Math.min(total(active.p),c)*1000,running);if(liveSession)void syncLiveSession(running?'running':(liveSession.status==='ready'?'ready':'paused'));saveSession();drawLive()}
+function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0),target=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);applyClockPosition(target*1000,running);if(liveSession)void syncLiveSession(running?'running':(liveSession.status==='ready'?'ready':'paused'));saveSession();drawLive()}
 
 homeBtn.onclick=goHome;
 (async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth){try{if(sessionNeedsRefresh())await refreshAuthSession()}catch(e){alert(e.message);login();return}await markOwnProfileActive();await loadProfiles();if(currentProfile&&!currentProfile.is_active){auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);alert('Ditt konto är inaktiverat. Kontakta en administratör.');login();return}}await loadRegistries();await loadPasses();checkResume()})();

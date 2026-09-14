@@ -419,3 +419,18 @@ main{padding-top:24px;padding-bottom:76px}
 
 /* Prototype 2.4.1 – Music Import drag & drop */
 .music-drop.drag-over{border-color:#E31836;background:#241116;box-shadow:0 0 0 3px rgba(227,24,54,.16)}
+
+/* Prototype 2.5.0 · Pro Realtime v0.1 */
+.pro-button{border-color:#111;font-weight:800}
+.pro-ready{min-height:65vh;display:flex;align-items:center;justify-content:center;padding:28px}
+.pro-ready-card{width:min(620px,100%);text-align:center;background:#fff;border:1px solid #e6e6e6;border-radius:22px;padding:34px;box-shadow:0 16px 45px rgba(0,0,0,.08)}
+.pro-kicker{font-size:13px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#777}
+.pro-pin{font-size:clamp(48px,10vw,84px);font-weight:950;letter-spacing:.12em;line-height:1;margin:26px 0 12px;font-variant-numeric:tabular-nums}
+.pro-session-id{font-size:12px;color:#999;word-break:break-all;margin-bottom:26px}
+.training-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.training-actions-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.pro-live-status{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:#111;color:#fff;font-size:12px;font-weight:900;letter-spacing:.04em;white-space:nowrap}
+@media (max-width:700px){.training-actions{align-items:flex-start}.pro-live-status{width:100%;justify-content:center}.pro-ready-card{padding:24px 18px}.pro-pin{letter-spacing:.08em}}
+
+.pro-session-state{display:inline-flex;align-items:center;justify-content:center;margin:22px 0 26px;padding:10px 16px;border-radius:999px;background:#f3f3f3;font-size:13px;font-weight:900;letter-spacing:.06em}
+.pro-countdown-label{margin-top:18px;font-size:13px;font-weight:900;letter-spacing:.08em}
