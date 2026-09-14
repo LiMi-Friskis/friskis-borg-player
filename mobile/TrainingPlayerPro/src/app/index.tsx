@@ -1,5 +1,10 @@
-import { useState } from "react";
 import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  Modal,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -13,6 +18,10 @@ import DeviceManager, {
 
 import SpinningView from "../components/SpinningView";
 import IndoorWalkingView from "../components/IndoorWalkingView";
+
+import {
+  useTabBar,
+} from "../context/TabBarContext";
 
 type Screen =
   | "home"
@@ -28,6 +37,24 @@ export default function HomeScreen() {
     useState<TrainingSetup | null>(
       null
     );
+
+  const { setTabBarHidden } =
+    useTabBar();
+
+  const workoutOpen =
+    screen === "spinning" ||
+    screen === "indoor-walking";
+
+  useEffect(() => {
+    setTabBarHidden(workoutOpen);
+
+    return () => {
+      setTabBarHidden(false);
+    };
+  }, [
+    workoutOpen,
+    setTabBarHidden,
+  ]);
 
   const handleReady = (
     trainingSetup: TrainingSetup
@@ -45,6 +72,13 @@ export default function HomeScreen() {
     setScreen("indoor-walking");
   };
 
+  const closeWorkout = () => {
+    setScreen("home");
+  };
+
+  /*
+   * DEVICE MANAGER
+   */
   if (screen === "devices") {
     return (
       <DeviceManager
@@ -56,96 +90,116 @@ export default function HomeScreen() {
     );
   }
 
-  if (
-    screen === "spinning" &&
-    setup
-  ) {
-    return (
-      <SpinningView
-        setup={setup}
-        onBack={() =>
-          setScreen("home")
-        }
-      />
-    );
-  }
-
-  if (
-    screen ===
-      "indoor-walking" &&
-    setup
-  ) {
-    return (
-      <IndoorWalkingView
-        setup={setup}
-        onBack={() =>
-          setScreen("home")
-        }
-      />
-    );
-  }
-
   return (
-    <SafeAreaView
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <Text style={styles.brand}>
-          Friskis
-        </Text>
-
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>
-            Training Player Pro
+    <>
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View
+          style={styles.content}
+        >
+          <Text
+            style={styles.brand}
+          >
+            Friskis
           </Text>
 
-          <View style={styles.badge}>
+          <View
+            style={styles.titleRow}
+          >
             <Text
-              style={styles.badgeText}
+              style={styles.title}
             >
-              PRO BETA
+              Training Player Pro
             </Text>
+
+            <View
+              style={styles.badge}
+            >
+              <Text
+                style={
+                  styles.badgeText
+                }
+              >
+                PRO BETA
+              </Text>
+            </View>
           </View>
+
+          <Pressable
+            style={
+              styles.primaryButton
+            }
+            onPress={() =>
+              setScreen("devices")
+            }
+          >
+            <Text
+              style={
+                styles.primaryButtonText
+              }
+            >
+              Börja träna
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={
+              styles.secondaryButton
+            }
+          >
+            <Text
+              style={
+                styles.secondaryButtonText
+              }
+            >
+              Anslut till pass
+            </Text>
+          </Pressable>
+
+          <Text
+            style={styles.info}
+          >
+            Du kan börja träna
+            fristående och ansluta till
+            instruktörens pass senare.
+          </Text>
         </View>
+      </SafeAreaView>
 
-        <Pressable
-          style={
-            styles.primaryButton
-          }
-          onPress={() =>
-            setScreen("devices")
-          }
-        >
-          <Text
-            style={
-              styles.primaryButtonText
+      <Modal
+        visible={
+          workoutOpen &&
+          setup !== null
+        }
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={
+          closeWorkout
+        }
+      >
+        {screen === "spinning" &&
+        setup ? (
+          <SpinningView
+            setup={setup}
+            onBack={
+              closeWorkout
             }
-          >
-            Börja träna
-          </Text>
-        </Pressable>
+          />
+        ) : null}
 
-        <Pressable
-          style={
-            styles.secondaryButton
-          }
-        >
-          <Text
-            style={
-              styles.secondaryButtonText
+        {screen ===
+          "indoor-walking" &&
+        setup ? (
+          <IndoorWalkingView
+            setup={setup}
+            onBack={
+              closeWorkout
             }
-          >
-            Anslut till pass
-          </Text>
-        </Pressable>
-
-        <Text style={styles.info}>
-          Du kan börja träna
-          fristående och ansluta till
-          instruktörens pass senare.
-        </Text>
-      </View>
-    </SafeAreaView>
+          />
+        ) : null}
+      </Modal>
+    </>
   );
 }
 

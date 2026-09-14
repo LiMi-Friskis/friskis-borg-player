@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -42,10 +43,92 @@ const CYCLING_POWER_SERVICE =
 const CYCLING_POWER_MEASUREMENT =
   "2A63";
 
+/*
+ * Sätt false för standalone.
+ * Sätt true för mockad Pro-session.
+ */
+const MOCK_PRO_SESSION = true;
+
+/*
+ * Tillfälligt FTP-värde.
+ * Senare kommer detta från användarprofilen.
+ */
+const MOCK_FTP = 200;
+
 type CrankState = {
   cumulativeRevolutions: number;
   lastEventTime: number;
 };
+
+type ProBlock = {
+  id: string;
+  title: string;
+  instruction: string;
+  durationSeconds: number;
+  targetFtpMin: number;
+  targetFtpMax: number;
+  targetRpmMin: number;
+  targetRpmMax: number;
+  color: string;
+};
+
+const mockBlocks: ProBlock[] = [
+  {
+    id: "1",
+    title: "Uppvärmning",
+    instruction: "Hitta rytmen",
+    durationSeconds: 180,
+    targetFtpMin: 50,
+    targetFtpMax: 60,
+    targetRpmMin: 75,
+    targetRpmMax: 85,
+    color: "#5576A8",
+  },
+  {
+    id: "2",
+    title: "Tempo",
+    instruction: "Sittande – jämnt tryck",
+    durationSeconds: 240,
+    targetFtpMin: 70,
+    targetFtpMax: 80,
+    targetRpmMin: 80,
+    targetRpmMax: 90,
+    color: "#55A07C",
+  },
+  {
+    id: "3",
+    title: "Backe",
+    instruction: "Öka motståndet",
+    durationSeconds: 180,
+    targetFtpMin: 85,
+    targetFtpMax: 95,
+    targetRpmMin: 60,
+    targetRpmMax: 70,
+    color: "#D3A642",
+  },
+  {
+    id: "4",
+    title: "Intervall",
+    instruction: "Stark och kontrollerad",
+    durationSeconds: 150,
+    targetFtpMin: 100,
+    targetFtpMax: 115,
+    targetRpmMin: 85,
+    targetRpmMax: 100,
+    color: "#C86748",
+  },
+  {
+    id: "5",
+    title: "Återhämtning",
+    instruction: "Lätta på motståndet",
+    durationSeconds: 120,
+    targetFtpMin: 50,
+    targetFtpMax: 60,
+    targetRpmMin: 70,
+    targetRpmMax: 80,
+    color: "#7F638F",
+  },
+];
 
 export default function SpinningView({
   setup,
@@ -74,13 +157,8 @@ export default function SpinningView({
         : "not-connected"
     );
 
-  /*
-   * Senare kommer detta från den aktiva
-   * Training Player Pro-sessionen.
-   *
-   * Just nu kör vi standalone.
-   */
-  const hasProSession = false;
+  const [sessionElapsed, setSessionElapsed] =
+    useState(0);
 
   const powerSubscription =
     useRef<Subscription | null>(
@@ -108,7 +186,6 @@ export default function SpinningView({
 
   /*
    * BODY BIKE
-   * Cycling Power Service
    */
   useEffect(() => {
     const startCyclingPower =
@@ -196,10 +273,6 @@ export default function SpinningView({
 
                   let offset = 2;
 
-                  /*
-                   * Instantaneous Power
-                   * signed int16
-                   */
                   let rawPower =
                     bytes[offset] |
                     (bytes[
@@ -219,7 +292,6 @@ export default function SpinningView({
 
                   offset += 2;
 
-                  // Pedal Power Balance
                   if (
                     (flags &
                       (1 << 0)) !==
@@ -228,7 +300,6 @@ export default function SpinningView({
                     offset += 1;
                   }
 
-                  // Accumulated Torque
                   if (
                     (flags &
                       (1 << 2)) !==
@@ -237,7 +308,6 @@ export default function SpinningView({
                     offset += 2;
                   }
 
-                  // Wheel Revolution Data
                   if (
                     (flags &
                       (1 << 4)) !==
@@ -246,10 +316,6 @@ export default function SpinningView({
                     offset += 6;
                   }
 
-                  /*
-                   * Crank Revolution Data
-                   * används för RPM.
-                   */
                   if (
                     (flags &
                       (1 << 5)) !==
@@ -258,9 +324,7 @@ export default function SpinningView({
                       offset + 4
                   ) {
                     const cumulativeRevolutions =
-                      bytes[
-                        offset
-                      ] |
+                      bytes[offset] |
                       (bytes[
                         offset + 1
                       ] << 8);
@@ -370,6 +434,31 @@ export default function SpinningView({
     setup.manager,
   ]);
 
+  /*
+   * MOCKAD PRO-KLOCKA
+   *
+   * Viktigt:
+   * detta är INTE samma timer som
+   * användarens egen träningsregistrering.
+   */
+  useEffect(() => {
+    if (!MOCK_PRO_SESSION) {
+      return;
+    }
+
+    const timer =
+      setInterval(() => {
+        setSessionElapsed(
+          (current) =>
+            current + 1
+        );
+      }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
   const equipmentName =
     setup.equipment
       ? setup.equipment.device.name ||
@@ -398,223 +487,137 @@ export default function SpinningView({
     bikeConnected ||
     pulseConnected;
 
-  /*
-   * När vi senare ansluter till
-   * instruktörspasset hamnar Pro-layouten
-   * här.
-   */
-  if (hasProSession) {
-    return (
-      <SafeAreaView
-        style={styles.container}
-      >
-        <View
-          style={
-            styles.proPlaceholder
-          }
-        >
-          <Text
-            style={
-              styles.proPlaceholderText
-            }
-          >
-            Pro-pass anslutet
-          </Text>
-        </View>
-      </SafeAreaView>
+  const currentFtpPercent =
+    powerWatts !== null &&
+    MOCK_FTP > 0
+      ? Math.round(
+          (powerWatts /
+            MOCK_FTP) *
+            100
+        )
+      : null;
+
+  const totalSessionSeconds =
+    useMemo(
+      () =>
+        mockBlocks.reduce(
+          (sum, block) =>
+            sum +
+            block.durationSeconds,
+          0
+        ),
+      []
     );
-  }
 
-  /*
-   * AVSLUTAD TRÄNING
-   *
-   * Ersätter träningsvyn i stället för
-   * att läggas under den. Därmed krävs
-   * ingen scrollning.
-   */
-  if (
-    activityState === "finished"
-  ) {
+  const sessionPosition =
+    sessionElapsed %
+    totalSessionSeconds;
+
+  const sessionInfo =
+    useMemo(() => {
+      let accumulated = 0;
+
+      for (
+        let index = 0;
+        index <
+        mockBlocks.length;
+        index++
+      ) {
+        const block =
+          mockBlocks[index];
+
+        const blockEnd =
+          accumulated +
+          block.durationSeconds;
+
+        if (
+          sessionPosition <
+          blockEnd
+        ) {
+          const elapsedInBlock =
+            sessionPosition -
+            accumulated;
+
+          return {
+            block,
+            index,
+            elapsedInBlock,
+            remainingInBlock:
+              block.durationSeconds -
+              elapsedInBlock,
+          };
+        }
+
+        accumulated =
+          blockEnd;
+      }
+
+      return {
+        block: mockBlocks[0],
+        index: 0,
+        elapsedInBlock: 0,
+        remainingInBlock:
+          mockBlocks[0]
+            .durationSeconds,
+      };
+    }, [sessionPosition]);
+
+  if (MOCK_PRO_SESSION) {
     return (
-      <SafeAreaView
-        style={styles.container}
-      >
-        <View
-          style={
-            styles.screenContent
-          }
-        >
-          <TopBar
-            onBack={onBack}
-            live={
-              anySensorConnected
-            }
-          />
-
-          <ProHeader
-            title="Spinning"
-            subtitle="Träningen avslutad"
-          />
-
-          <View
-            style={
-              styles.finishedHeader
-            }
-          >
-            <Text
-              style={
-                styles.smallLabel
-              }
-            >
-              TRÄNINGSTID
-            </Text>
-
-            <Text
-              style={
-                styles.finishedTime
-              }
-            >
-              {formatTrainingTime(
-                elapsedSeconds
-              )}
-            </Text>
-          </View>
-
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-            <Text
-              style={
-                styles.summaryEyebrow
-              }
-            >
-              SAMMANFATTNING
-            </Text>
-
-            <SummaryRow
-              label="Snittpuls"
-              value={
-                summary.averageHeartRate !==
-                null
-                  ? `${Math.round(
-                      summary.averageHeartRate
-                    )} bpm`
-                  : "--"
-              }
-            />
-
-            <SummaryRow
-              label="Maxpuls"
-              value={
-                summary.maxHeartRate !==
-                null
-                  ? `${summary.maxHeartRate} bpm`
-                  : "--"
-              }
-            />
-
-            <SummaryRow
-              label="Snitteffekt"
-              value={
-                summary.averagePower !==
-                null
-                  ? `${Math.round(
-                      summary.averagePower
-                    )} W`
-                  : "--"
-              }
-            />
-
-            <SummaryRow
-              label="Maxeffekt"
-              value={
-                summary.maxPower !==
-                null
-                  ? `${Math.round(
-                      summary.maxPower
-                    )} W`
-                  : "--"
-              }
-            />
-
-            <SummaryRow
-              label="Snittkadens"
-              value={
-                summary.averageCadence !==
-                null
-                  ? `${Math.round(
-                      summary.averageCadence
-                    )} RPM`
-                  : "--"
-              }
-              last
-            />
-          </View>
-
-          <View
-            style={
-              styles.finishedMetrics
-            }
-          >
-            <CompactMetric
-              label="WATT NU"
-              value={
-                powerWatts !== null
-                  ? `${powerWatts}`
-                  : "--"
-              }
-              unit="W"
-            />
-
-            <CompactMetric
-              label="RPM NU"
-              value={
-                cadenceRpm !== null
-                  ? `${Math.round(
-                      cadenceRpm
-                    )}`
-                  : "--"
-              }
-              unit="RPM"
-            />
-
-            <CompactMetric
-              label="PULS NU"
-              value={
-                heartRate !== null
-                  ? `${heartRate}`
-                  : "--"
-              }
-              unit="BPM"
-            />
-          </View>
-
-          <View
-            style={
-              styles.bottomArea
-            }
-          >
-            <Pressable
-              style={
-                styles.primaryButton
-              }
-              onPress={
-                startTraining
-              }
-            >
-              <Text
-                style={
-                  styles.primaryButtonText
-                }
-              >
-                Starta ny träning
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
+      <ProSessionView
+        onBack={onBack}
+        live={
+          anySensorConnected
+        }
+        equipmentName={
+          equipmentName
+        }
+        pulseDeviceName={
+          pulseDeviceName
+        }
+        bikeConnected={
+          bikeConnected
+        }
+        pulseConnected={
+          pulseConnected
+        }
+        currentBlock={
+          sessionInfo.block
+        }
+        currentBlockIndex={
+          sessionInfo.index
+        }
+        blockRemaining={
+          sessionInfo.remainingInBlock
+        }
+        sessionElapsed={
+          sessionElapsed
+        }
+        powerWatts={
+          powerWatts
+        }
+        cadenceRpm={
+          cadenceRpm
+        }
+        heartRate={
+          heartRate
+        }
+        currentFtpPercent={
+          currentFtpPercent
+        }
+        activityState={
+          activityState
+        }
+        elapsedSeconds={
+          elapsedSeconds
+        }
+        startTraining={
+          startTraining
+        }
+        stopTraining={
+          stopTraining
+        }
+      />
     );
   }
 
@@ -773,7 +776,8 @@ export default function SpinningView({
                 styles.ftpValue
               }
             >
-              --
+              {currentFtpPercent ??
+                "--"}
             </Text>
           </View>
 
@@ -787,7 +791,7 @@ export default function SpinningView({
                 styles.ftpTitle
               }
             >
-              FTP inte inställt
+              FTP
             </Text>
 
             <Text
@@ -795,9 +799,7 @@ export default function SpinningView({
                 styles.ftpDescription
               }
             >
-              Lägg till FTP senare för
-              att visa aktuell
-              intensitet i procent.
+              Mockvärde: {MOCK_FTP} W
             </Text>
           </View>
         </View>
@@ -861,6 +863,383 @@ export default function SpinningView({
   );
 }
 
+/*
+ * PRO-PASS
+ */
+function ProSessionView({
+  onBack,
+  live,
+  equipmentName,
+  pulseDeviceName,
+  bikeConnected,
+  pulseConnected,
+  currentBlock,
+  currentBlockIndex,
+  blockRemaining,
+  sessionElapsed,
+  powerWatts,
+  cadenceRpm,
+  heartRate,
+  currentFtpPercent,
+  activityState,
+  elapsedSeconds,
+  startTraining,
+  stopTraining,
+}: {
+  onBack: () => void;
+  live: boolean;
+  equipmentName: string | null;
+  pulseDeviceName: string | null;
+  bikeConnected: boolean;
+  pulseConnected: boolean;
+  currentBlock: ProBlock;
+  currentBlockIndex: number;
+  blockRemaining: number;
+  sessionElapsed: number;
+  powerWatts: number | null;
+  cadenceRpm: number | null;
+  heartRate: number | null;
+  currentFtpPercent:
+    | number
+    | null;
+  activityState:
+    | "idle"
+    | "recording"
+    | "finished";
+  elapsedSeconds: number;
+  startTraining: () => void;
+  stopTraining: () => void;
+}) {
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      <View
+        style={
+          styles.proScreenContent
+        }
+      >
+        <TopBar
+          onBack={onBack}
+          live={live}
+        />
+
+        <ProHeader
+          title="Spinning"
+          subtitle="Training Player Pro"
+        />
+
+        <View
+          style={styles.sensorRow}
+        >
+          <SensorCard
+            label="CYKEL"
+            value={
+              equipmentName ??
+              "Ej ansluten"
+            }
+            connected={
+              bikeConnected
+            }
+          />
+
+          <SensorCard
+            label="PULS"
+            value={
+              pulseDeviceName ??
+              "Ej ansluten"
+            }
+            connected={
+              pulseConnected
+            }
+          />
+        </View>
+
+        <View
+          style={
+            styles.proTimeRow
+          }
+        >
+          <View>
+            <Text
+              style={
+                styles.smallLabel
+              }
+            >
+              KVAR I BLOCK
+            </Text>
+
+            <Text
+              style={
+                styles.blockTime
+              }
+            >
+              {formatTrainingTime(
+                blockRemaining
+              )}
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.sessionTimeArea
+            }
+          >
+            <Text
+              style={
+                styles.smallLabel
+              }
+            >
+              PASSTID
+            </Text>
+
+            <Text
+              style={
+                styles.sessionTime
+              }
+            >
+              {formatTrainingTime(
+                sessionElapsed
+              )}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={
+            styles.profileRow
+          }
+        >
+          {mockBlocks.map(
+            (block, index) => (
+              <View
+                key={block.id}
+                style={[
+                  styles.profileSegment,
+                  {
+                    flex:
+                      block.durationSeconds,
+                    backgroundColor:
+                      block.color,
+                    opacity:
+                      index ===
+                      currentBlockIndex
+                        ? 1
+                        : 0.35,
+                  },
+                ]}
+              />
+            )
+          )}
+        </View>
+
+        <View
+          style={[
+            styles.blockCard,
+            {
+              borderTopColor:
+                currentBlock.color,
+            },
+          ]}
+        >
+          <Text
+            style={
+              styles.blockEyebrow
+            }
+          >
+            AKTUELLT BLOCK
+          </Text>
+
+          <Text
+            style={
+              styles.blockTitle
+            }
+          >
+            {currentBlock.title}
+          </Text>
+
+          <Text
+            style={
+              styles.blockInstruction
+            }
+          >
+            {
+              currentBlock.instruction
+            }
+          </Text>
+
+          <View
+            style={
+              styles.targetsRow
+            }
+          >
+            <Target
+              label="MÅL %FTP"
+              value={`${currentBlock.targetFtpMin}–${currentBlock.targetFtpMax}`}
+            />
+
+            <Target
+              label="MÅL RPM"
+              value={`${currentBlock.targetRpmMin}–${currentBlock.targetRpmMax}`}
+            />
+          </View>
+        </View>
+
+        <View
+          style={
+            styles.proMetrics
+          }
+        >
+          <MainMetric
+            label="%FTP"
+            value={
+              currentFtpPercent !==
+              null
+                ? String(
+                    currentFtpPercent
+                  )
+                : "--"
+            }
+            unit="%"
+          />
+
+          <View
+            style={
+              styles.metricDivider
+            }
+          />
+
+          <MainMetric
+            label="RPM"
+            value={
+              cadenceRpm !== null
+                ? String(
+                    Math.round(
+                      cadenceRpm
+                    )
+                  )
+                : "--"
+            }
+            unit="RPM"
+          />
+
+          <View
+            style={
+              styles.metricDivider
+            }
+          />
+
+          <MainMetric
+            label="PULS"
+            value={
+              heartRate !== null
+                ? String(heartRate)
+                : "--"
+            }
+            unit="BPM"
+          />
+        </View>
+
+        <View
+          style={
+            styles.secondaryMetrics
+          }
+        >
+          <View>
+            <Text
+              style={
+                styles.secondaryLabel
+              }
+            >
+              EFFEKT
+            </Text>
+
+            <Text
+              style={
+                styles.secondaryValue
+              }
+            >
+              {powerWatts !== null
+                ? `${powerWatts} W`
+                : "-- W"}
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.secondaryRight
+            }
+          >
+            <Text
+              style={
+                styles.secondaryLabel
+              }
+            >
+              DIN TRÄNING
+            </Text>
+
+            <Text
+              style={
+                styles.secondaryValue
+              }
+            >
+              {activityState ===
+              "recording"
+                ? formatTrainingTime(
+                    elapsedSeconds
+                  )
+                : "Inte startad"}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={
+            styles.proBottom
+          }
+        >
+          {activityState ===
+          "recording" ? (
+            <Pressable
+              style={
+                styles.proStopButton
+              }
+              onPress={
+                stopTraining
+              }
+            >
+              <Text
+                style={
+                  styles.proStopText
+                }
+              >
+                Stoppa registrering
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={
+                styles.proStartButton
+              }
+              onPress={
+                startTraining
+              }
+            >
+              <Text
+                style={
+                  styles.primaryButtonText
+                }
+              >
+                Starta registrering
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 function TopBar({
   onBack,
   live,
@@ -897,7 +1276,9 @@ function TopBar({
         <Text
           style={styles.liveText}
         >
-          {live ? "LIVE" : "VÄNTAR"}
+          {live
+            ? "LIVE"
+            : "VÄNTAR"}
         </Text>
       </View>
     </View>
@@ -965,17 +1346,13 @@ function MainMetric({
       style={styles.mainMetric}
     >
       <Text
-        style={
-          styles.metricLabel
-        }
+        style={styles.metricLabel}
       >
         {label}
       </Text>
 
       <Text
-        style={
-          styles.metricValue
-        }
+        style={styles.metricValue}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
@@ -983,9 +1360,7 @@ function MainMetric({
       </Text>
 
       <Text
-        style={
-          styles.metricUnit
-        }
+        style={styles.metricUnit}
       >
         {unit}
       </Text>
@@ -993,24 +1368,18 @@ function MainMetric({
   );
 }
 
-function CompactMetric({
+function Target({
   label,
   value,
-  unit,
 }: {
   label: string;
   value: string;
-  unit: string;
 }) {
   return (
-    <View
-      style={
-        styles.compactMetric
-      }
-    >
+    <View style={styles.target}>
       <Text
         style={
-          styles.compactMetricLabel
+          styles.targetLabel
         }
       >
         {label}
@@ -1018,51 +1387,7 @@ function CompactMetric({
 
       <Text
         style={
-          styles.compactMetricValue
-        }
-      >
-        {value}
-      </Text>
-
-      <Text
-        style={
-          styles.compactMetricUnit
-        }
-      >
-        {unit}
-      </Text>
-    </View>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-  last = false,
-}: {
-  label: string;
-  value: string;
-  last?: boolean;
-}) {
-  return (
-    <View
-      style={[
-        styles.summaryRow,
-        last &&
-          styles.summaryRowLast,
-      ]}
-    >
-      <Text
-        style={
-          styles.summaryLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={
-          styles.summaryValue
+          styles.targetValue
         }
       >
         {value}
@@ -1085,12 +1410,19 @@ const styles =
       paddingBottom: 14,
     },
 
+    proScreenContent: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 12,
+    },
+
     topBar: {
       flexDirection: "row",
       justifyContent:
         "space-between",
       alignItems: "center",
-      marginBottom: 18,
+      marginBottom: 16,
     },
 
     back: {
@@ -1134,16 +1466,16 @@ const styles =
     sensorRow: {
       flexDirection: "row",
       gap: 9,
-      marginTop: 20,
+      marginTop: 16,
     },
 
     sensorCard: {
       flex: 1,
       minWidth: 0,
       backgroundColor: "#18181b",
-      borderRadius: 17,
-      paddingHorizontal: 15,
-      paddingVertical: 12,
+      borderRadius: 15,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
     },
 
     sensorLabelRow: {
@@ -1165,47 +1497,131 @@ const styles =
 
     sensorLabel: {
       color: "#77777d",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "800",
       letterSpacing: 1.2,
     },
 
     sensorValue: {
       color: "#ffffff",
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700",
-      marginTop: 5,
+      marginTop: 4,
     },
 
-    timeSection: {
-      alignItems: "center",
-      marginTop: 25,
+    proTimeRow: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      alignItems: "flex-end",
+      marginTop: 19,
     },
 
     smallLabel: {
       color: "#77777d",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "800",
-      letterSpacing: 1.6,
+      letterSpacing: 1.5,
     },
 
-    trainingTime: {
+    blockTime: {
       color: "#ffffff",
-      fontSize: 57,
-      lineHeight: 63,
+      fontSize: 42,
+      lineHeight: 46,
       fontWeight: "800",
-      marginTop: 2,
       fontVariant: [
         "tabular-nums",
       ],
     },
 
-    activityStatus: {
-      color: "#E31836",
-      fontSize: 10,
+    sessionTimeArea: {
+      alignItems: "flex-end",
+      paddingBottom: 4,
+    },
+
+    sessionTime: {
+      color: "#d0d0d4",
+      fontSize: 20,
+      fontWeight: "700",
+      marginTop: 3,
+      fontVariant: [
+        "tabular-nums",
+      ],
+    },
+
+    profileRow: {
+      flexDirection: "row",
+      height: 12,
+      gap: 3,
+      marginTop: 13,
+    },
+
+    profileSegment: {
+      borderRadius: 4,
+    },
+
+    blockCard: {
+      backgroundColor: "#18181b",
+      borderRadius: 20,
+      padding: 17,
+      marginTop: 13,
+      borderTopWidth: 4,
+    },
+
+    blockEyebrow: {
+      color: "#89898f",
+      fontSize: 9,
       fontWeight: "800",
-      letterSpacing: 1.6,
-      marginTop: 1,
+      letterSpacing: 1.4,
+    },
+
+    blockTitle: {
+      color: "#ffffff",
+      fontSize: 25,
+      fontWeight: "800",
+      marginTop: 3,
+    },
+
+    blockInstruction: {
+      color: "#99999f",
+      fontSize: 13,
+      marginTop: 2,
+    },
+
+    targetsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 14,
+    },
+
+    target: {
+      flex: 1,
+      backgroundColor: "#222225",
+      borderRadius: 13,
+      padding: 11,
+    },
+
+    targetLabel: {
+      color: "#77777c",
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 1,
+    },
+
+    targetValue: {
+      color: "#ffffff",
+      fontSize: 22,
+      fontWeight: "800",
+      marginTop: 2,
+    },
+
+    proMetrics: {
+      flexDirection: "row",
+      backgroundColor: "#18181b",
+      borderRadius: 20,
+      marginTop: 11,
+      paddingVertical: 14,
+      paddingHorizontal: 5,
     },
 
     mainMetrics: {
@@ -1231,24 +1647,100 @@ const styles =
 
     metricLabel: {
       color: "#85858b",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "800",
-      letterSpacing: 1.3,
+      letterSpacing: 1.2,
     },
 
     metricValue: {
       color: "#ffffff",
-      fontSize: 40,
-      lineHeight: 47,
+      fontSize: 36,
+      lineHeight: 40,
       fontWeight: "800",
-      marginTop: 5,
+      marginTop: 2,
       maxWidth: "100%",
     },
 
     metricUnit: {
       color: "#8e8e94",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "700",
+    },
+
+    secondaryMetrics: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      backgroundColor: "#141416",
+      borderRadius: 14,
+      padding: 12,
+      marginTop: 8,
+    },
+
+    secondaryRight: {
+      alignItems: "flex-end",
+    },
+
+    secondaryLabel: {
+      color: "#6d6d72",
+      fontSize: 8,
+      fontWeight: "800",
+      letterSpacing: 1,
+    },
+
+    secondaryValue: {
+      color: "#d2d2d6",
+      fontSize: 13,
+      fontWeight: "700",
+      marginTop: 2,
+    },
+
+    proBottom: {
+      marginTop: "auto",
+      paddingTop: 8,
+    },
+
+    proStartButton: {
+      backgroundColor: "#E31836",
+      borderRadius: 17,
+      alignItems: "center",
+      paddingVertical: 15,
+    },
+
+    proStopButton: {
+      backgroundColor: "#ffffff",
+      borderRadius: 17,
+      alignItems: "center",
+      paddingVertical: 15,
+    },
+
+    proStopText: {
+      color: "#111111",
+      fontSize: 16,
+      fontWeight: "800",
+    },
+
+    timeSection: {
+      alignItems: "center",
+      marginTop: 25,
+    },
+
+    trainingTime: {
+      color: "#ffffff",
+      fontSize: 57,
+      lineHeight: 63,
+      fontWeight: "800",
+      marginTop: 2,
+      fontVariant: [
+        "tabular-nums",
+      ],
+    },
+
+    activityStatus: {
+      color: "#E31836",
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 1.6,
       marginTop: 1,
     },
 
@@ -1299,7 +1791,7 @@ const styles =
 
     primaryButtonText: {
       color: "#ffffff",
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "800",
     },
 
@@ -1325,107 +1817,6 @@ const styles =
     joinButtonText: {
       color: "#98989d",
       fontSize: 14,
-      fontWeight: "700",
-    },
-
-    finishedHeader: {
-      alignItems: "center",
-      marginTop: 28,
-    },
-
-    finishedTime: {
-      color: "#ffffff",
-      fontSize: 52,
-      fontWeight: "800",
-      fontVariant: [
-        "tabular-nums",
-      ],
-      marginTop: 3,
-    },
-
-    summaryCard: {
-      backgroundColor: "#18181b",
-      borderRadius: 22,
-      padding: 18,
-      marginTop: 22,
-    },
-
-    summaryEyebrow: {
-      color: "#E31836",
-      fontSize: 10,
-      fontWeight: "800",
-      letterSpacing: 1.4,
-      marginBottom: 7,
-    },
-
-    summaryRow: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems: "center",
-      borderBottomWidth: 1,
-      borderBottomColor: "#2a2a2e",
-      paddingVertical: 9,
-    },
-
-    summaryRowLast: {
-      borderBottomWidth: 0,
-    },
-
-    summaryLabel: {
-      color: "#96969b",
-      fontSize: 14,
-    },
-
-    summaryValue: {
-      color: "#ffffff",
-      fontSize: 15,
-      fontWeight: "700",
-    },
-
-    finishedMetrics: {
-      flexDirection: "row",
-      gap: 8,
-      marginTop: 10,
-    },
-
-    compactMetric: {
-      flex: 1,
-      backgroundColor: "#151517",
-      borderRadius: 15,
-      padding: 12,
-      alignItems: "center",
-    },
-
-    compactMetricLabel: {
-      color: "#717176",
-      fontSize: 8,
-      fontWeight: "800",
-      letterSpacing: 0.8,
-    },
-
-    compactMetricValue: {
-      color: "#ffffff",
-      fontSize: 25,
-      fontWeight: "800",
-      marginTop: 3,
-    },
-
-    compactMetricUnit: {
-      color: "#747479",
-      fontSize: 9,
-      fontWeight: "700",
-    },
-
-    proPlaceholder: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    proPlaceholderText: {
-      color: "#ffffff",
-      fontSize: 20,
       fontWeight: "700",
     },
   });
