@@ -30,11 +30,16 @@ import {
   useTrainingSession,
 } from "../hooks/useTrainingSession";
 
+import {
+  useLiveSession,
+} from "../hooks/useLiveSession";
+
 import ProHeader from "./pro/ProHeader";
 
 type Props = {
   setup: TrainingSetup;
   onBack: () => void;
+  sessionId?: string | null;
 };
 
 const CYCLING_POWER_SERVICE =
@@ -44,14 +49,9 @@ const CYCLING_POWER_MEASUREMENT =
   "2A63";
 
 /*
- * Sätt false för standalone.
- * Sätt true för mockad Pro-session.
- */
-const MOCK_PRO_SESSION = true;
-
-/*
  * Tillfälligt FTP-värde.
- * Senare kommer detta från användarprofilen.
+ * Senare hämtas detta från
+ * användarprofilen.
  */
 const MOCK_FTP = 200;
 
@@ -60,105 +60,245 @@ type CrankState = {
   lastEventTime: number;
 };
 
-type ProBlock = {
+type DisplayBlock = {
   id: string;
   title: string;
   instruction: string;
   durationSeconds: number;
-  targetFtpMin: number;
-  targetFtpMax: number;
-  targetRpmMin: number;
-  targetRpmMax: number;
+  targetFtpMin:
+    | number
+    | null;
+  targetFtpMax:
+    | number
+    | null;
+  targetRpmMin:
+    | number
+    | null;
+  targetRpmMax:
+    | number
+    | null;
   color: string;
 };
 
-const mockBlocks: ProBlock[] = [
-  {
-    id: "1",
-    title: "Uppvärmning",
-    instruction: "Hitta rytmen",
-    durationSeconds: 180,
-    targetFtpMin: 50,
-    targetFtpMax: 60,
-    targetRpmMin: 75,
-    targetRpmMax: 85,
-    color: "#5576A8",
-  },
-  {
-    id: "2",
-    title: "Tempo",
-    instruction: "Sittande – jämnt tryck",
-    durationSeconds: 240,
-    targetFtpMin: 70,
-    targetFtpMax: 80,
-    targetRpmMin: 80,
-    targetRpmMax: 90,
-    color: "#55A07C",
-  },
-  {
-    id: "3",
-    title: "Backe",
-    instruction: "Öka motståndet",
-    durationSeconds: 180,
-    targetFtpMin: 85,
-    targetFtpMax: 95,
-    targetRpmMin: 60,
-    targetRpmMax: 70,
-    color: "#D3A642",
-  },
-  {
-    id: "4",
-    title: "Intervall",
-    instruction: "Stark och kontrollerad",
-    durationSeconds: 150,
-    targetFtpMin: 100,
-    targetFtpMax: 115,
-    targetRpmMin: 85,
-    targetRpmMax: 100,
-    color: "#C86748",
-  },
-  {
-    id: "5",
-    title: "Återhämtning",
-    instruction: "Lätta på motståndet",
-    durationSeconds: 120,
-    targetFtpMin: 50,
-    targetFtpMax: 60,
-    targetRpmMin: 70,
-    targetRpmMax: 80,
-    color: "#7F638F",
-  },
-];
+function numberValue(
+  value: unknown
+): number | null {
+  if (
+    typeof value ===
+      "number" &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  if (
+    typeof value ===
+    "string"
+  ) {
+    const parsed =
+      Number(value);
+
+    if (
+      Number.isFinite(
+        parsed
+      )
+    ) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function firstNumber(
+  object: Record<
+    string,
+    unknown
+  >,
+  keys: string[]
+) {
+  for (
+    const key of keys
+  ) {
+    const value =
+      numberValue(
+        object[key]
+      );
+
+    if (
+      value !== null
+    ) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function toDisplayBlock(
+  raw: unknown,
+  index: number
+): DisplayBlock {
+  const block =
+    raw &&
+    typeof raw === "object"
+      ? (raw as Record<
+          string,
+          unknown
+        >)
+      : {};
+
+  return {
+    id:
+      String(
+        block.id ??
+          index
+      ),
+
+    title:
+      String(
+        block.name ??
+          block.title ??
+          `Block ${
+            index + 1
+          }`
+      ),
+
+    instruction:
+      String(
+        block.description ??
+          block.instruction ??
+          ""
+      ),
+
+    durationSeconds:
+      firstNumber(
+        block,
+        [
+          "durationSec",
+          "durationSeconds",
+          "duration",
+        ]
+      ) ?? 0,
+
+    targetFtpMin:
+      firstNumber(
+        block,
+        [
+          "targetFtpMin",
+          "ftpMin",
+          "targetFTPMin",
+          "ftp_min",
+        ]
+      ),
+
+    targetFtpMax:
+      firstNumber(
+        block,
+        [
+          "targetFtpMax",
+          "ftpMax",
+          "targetFTPMax",
+          "ftp_max",
+        ]
+      ),
+
+    targetRpmMin:
+      firstNumber(
+        block,
+        [
+          "targetRpmMin",
+          "rpmMin",
+          "targetRPMMin",
+          "rpm_min",
+        ]
+      ),
+
+    targetRpmMax:
+      firstNumber(
+        block,
+        [
+          "targetRpmMax",
+          "rpmMax",
+          "targetRPMMax",
+          "rpm_max",
+        ]
+      ),
+
+    color:
+      typeof block.color ===
+        "string"
+        ? block.color
+        : "#5576A8",
+  };
+}
+
+function rangeText(
+  min: number | null,
+  max: number | null
+) {
+  if (
+    min !== null &&
+    max !== null
+  ) {
+    return `${min}–${max}`;
+  }
+
+  if (
+    min !== null
+  ) {
+    return String(min);
+  }
+
+  if (
+    max !== null
+  ) {
+    return String(max);
+  }
+
+  return "--";
+}
 
 export default function SpinningView({
   setup,
   onBack,
+  sessionId = null,
 }: Props) {
   const {
     heartRate,
     heartRateStatus,
-  } = useHeartRate(setup);
+  } =
+    useHeartRate(setup);
 
-  const [powerWatts, setPowerWatts] =
-    useState<number | null>(null);
-
-  const [cadenceRpm, setCadenceRpm] =
-    useState<number | null>(null);
-
-  const [bikeStatus, setBikeStatus] =
-    useState<
-      | "not-connected"
-      | "connecting"
-      | "connected"
-      | "error"
-    >(
-      setup.equipment
-        ? "connecting"
-        : "not-connected"
+  const [
+    powerWatts,
+    setPowerWatts,
+  ] =
+    useState<number | null>(
+      null
     );
 
-  const [sessionElapsed, setSessionElapsed] =
-    useState(0);
+  const [
+    cadenceRpm,
+    setCadenceRpm,
+  ] =
+    useState<number | null>(
+      null
+    );
+
+  const [
+    bikeStatus,
+    setBikeStatus,
+  ] = useState<
+    | "not-connected"
+    | "connecting"
+    | "connected"
+    | "error"
+  >(
+    setup.equipment
+      ? "connecting"
+      : "not-connected"
+  );
 
   const powerSubscription =
     useRef<Subscription | null>(
@@ -173,7 +313,6 @@ export default function SpinningView({
   const {
     activityState,
     elapsedSeconds,
-    summary,
     startTraining,
     stopTraining,
   } = useTrainingSession({
@@ -184,13 +323,20 @@ export default function SpinningView({
     cadenceRpm,
   });
 
+  const liveSession =
+    useLiveSession(
+      sessionId
+    );
+
   /*
    * BODY BIKE
    */
   useEffect(() => {
     const startCyclingPower =
       async () => {
-        if (!setup.equipment) {
+        if (
+          !setup.equipment
+        ) {
           setBikeStatus(
             "not-connected"
           );
@@ -198,7 +344,8 @@ export default function SpinningView({
         }
 
         const deviceId =
-          setup.equipment.device.id;
+          setup.equipment
+            .device.id;
 
         try {
           setBikeStatus(
@@ -244,7 +391,8 @@ export default function SpinningView({
                 }
 
                 if (
-                  !characteristic?.value
+                  !characteristic
+                    ?.value
                 ) {
                   return;
                 }
@@ -262,14 +410,16 @@ export default function SpinningView({
                     );
 
                   if (
-                    bytes.length < 4
+                    bytes.length <
+                    4
                   ) {
                     return;
                   }
 
                   const flags =
                     bytes[0] |
-                    (bytes[1] << 8);
+                    (bytes[1] <<
+                      8);
 
                   let offset = 2;
 
@@ -277,10 +427,12 @@ export default function SpinningView({
                     bytes[offset] |
                     (bytes[
                       offset + 1
-                    ] << 8);
+                    ] <<
+                      8);
 
                   if (
-                    rawPower & 0x8000
+                    rawPower &
+                    0x8000
                   ) {
                     rawPower -=
                       0x10000;
@@ -324,10 +476,13 @@ export default function SpinningView({
                       offset + 4
                   ) {
                     const cumulativeRevolutions =
-                      bytes[offset] |
+                      bytes[
+                        offset
+                      ] |
                       (bytes[
                         offset + 1
-                      ] << 8);
+                      ] <<
+                        8);
 
                     const lastEventTime =
                       bytes[
@@ -335,7 +490,8 @@ export default function SpinningView({
                       ] |
                       (bytes[
                         offset + 3
-                      ] << 8);
+                      ] <<
+                        8);
 
                     const previous =
                       previousCrank.current;
@@ -358,7 +514,8 @@ export default function SpinningView({
                         previous.lastEventTime;
 
                       if (
-                        timeDelta < 0
+                        timeDelta <
+                        0
                       ) {
                         timeDelta +=
                           65536;
@@ -379,8 +536,10 @@ export default function SpinningView({
                           60;
 
                         if (
-                          rpm >= 0 &&
-                          rpm < 250
+                          rpm >=
+                            0 &&
+                          rpm <
+                            250
                         ) {
                           setCadenceRpm(
                             rpm
@@ -399,7 +558,9 @@ export default function SpinningView({
                   setBikeStatus(
                     "connected"
                   );
-                } catch (error) {
+                } catch (
+                  error
+                ) {
                   console.log(
                     "Cycling power decode error:",
                     error
@@ -417,7 +578,9 @@ export default function SpinningView({
             error
           );
 
-          setBikeStatus("error");
+          setBikeStatus(
+            "error"
+          );
         }
       };
 
@@ -434,50 +597,30 @@ export default function SpinningView({
     setup.manager,
   ]);
 
-  /*
-   * MOCKAD PRO-KLOCKA
-   *
-   * Viktigt:
-   * detta är INTE samma timer som
-   * användarens egen träningsregistrering.
-   */
-  useEffect(() => {
-    if (!MOCK_PRO_SESSION) {
-      return;
-    }
-
-    const timer =
-      setInterval(() => {
-        setSessionElapsed(
-          (current) =>
-            current + 1
-        );
-      }, 1000);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
-
   const equipmentName =
     setup.equipment
-      ? setup.equipment.device.name ||
-        setup.equipment.device
+      ? setup.equipment
+          .device.name ||
+        setup.equipment
+          .device
           .localName ||
         "Body Bike"
       : null;
 
   const pulseDeviceName =
     setup.heartRateDevice
-      ? setup.heartRateDevice.device
-          .name ||
-        setup.heartRateDevice.device
-          .localName ||
+      ? setup
+          .heartRateDevice
+          .device.name ||
+        setup
+          .heartRateDevice
+          .device.localName ||
         "Pulsmätare"
       : null;
 
   const bikeConnected =
-    bikeStatus === "connected";
+    bikeStatus ===
+    "connected";
 
   const pulseConnected =
     heartRateStatus ===
@@ -497,77 +640,234 @@ export default function SpinningView({
         )
       : null;
 
-  const totalSessionSeconds =
-    useMemo(
-      () =>
-        mockBlocks.reduce(
-          (sum, block) =>
-            sum +
-            block.durationSeconds,
-          0
-        ),
-      []
+  /*
+   * PRO SESSION
+   */
+  const proBlocks =
+    useMemo(() => {
+      const rawBlocks =
+        liveSession.session
+          ?.pass_snapshot
+          ?.blocks;
+
+      if (
+        !Array.isArray(
+          rawBlocks
+        )
+      ) {
+        return [];
+      }
+
+      return rawBlocks
+        .map(
+          (
+            block,
+            index
+          ) =>
+            toDisplayBlock(
+              block,
+              index
+            )
+        )
+        .sort(
+          (a, b) => {
+            const rawA =
+              rawBlocks.find(
+                (
+                  item: any
+                ) =>
+                  String(
+                    item?.id
+                  ) === a.id
+              ) as any;
+
+            const rawB =
+              rawBlocks.find(
+                (
+                  item: any
+                ) =>
+                  String(
+                    item?.id
+                  ) === b.id
+              ) as any;
+
+            return (
+              Number(
+                rawA?.order ??
+                  0
+              ) -
+              Number(
+                rawB?.order ??
+                  0
+              )
+            );
+          }
+        );
+    }, [
+      liveSession.session,
+    ]);
+
+  const currentBlockIndex =
+    Math.max(
+      0,
+      liveSession.session
+        ?.current_block_index ??
+        0
     );
 
-  const sessionPosition =
-    sessionElapsed %
-    totalSessionSeconds;
+  const currentBlock =
+    proBlocks[
+      currentBlockIndex
+    ] ??
+    proBlocks[0] ??
+    null;
 
-  const sessionInfo =
+  const blockStartSeconds =
     useMemo(() => {
-      let accumulated = 0;
+      let total = 0;
 
       for (
         let index = 0;
         index <
-        mockBlocks.length;
+        currentBlockIndex;
         index++
       ) {
-        const block =
-          mockBlocks[index];
-
-        const blockEnd =
-          accumulated +
-          block.durationSeconds;
-
-        if (
-          sessionPosition <
-          blockEnd
-        ) {
-          const elapsedInBlock =
-            sessionPosition -
-            accumulated;
-
-          return {
-            block,
-            index,
-            elapsedInBlock,
-            remainingInBlock:
-              block.durationSeconds -
-              elapsedInBlock,
-          };
-        }
-
-        accumulated =
-          blockEnd;
+        total +=
+          proBlocks[index]
+            ?.durationSeconds ??
+          0;
       }
 
-      return {
-        block: mockBlocks[0],
-        index: 0,
-        elapsedInBlock: 0,
-        remainingInBlock:
-          mockBlocks[0]
-            .durationSeconds,
-      };
-    }, [sessionPosition]);
+      return total;
+    }, [
+      proBlocks,
+      currentBlockIndex,
+    ]);
 
-  if (MOCK_PRO_SESSION) {
+  const blockElapsed =
+    Math.max(
+      0,
+      liveSession
+        .currentPositionSeconds -
+        blockStartSeconds
+    );
+
+  const blockRemaining =
+    currentBlock
+      ? Math.max(
+          0,
+          currentBlock.durationSeconds -
+            blockElapsed
+        )
+      : 0;
+
+  if (sessionId) {
+    if (
+      liveSession.loading
+    ) {
+      return (
+        <StatusScreen
+          onBack={onBack}
+          title="Ansluter till pass…"
+        />
+      );
+    }
+
+    if (
+      liveSession.error ||
+      !liveSession.session
+    ) {
+      return (
+        <StatusScreen
+          onBack={onBack}
+          title="Kunde inte ansluta"
+          subtitle={
+            liveSession.error ??
+            "Passet kunde inte hämtas."
+          }
+        />
+      );
+    }
+
+    const status =
+      liveSession.session
+        .status;
+
+    if (
+      status === "ready"
+    ) {
+      return (
+        <WaitingScreen
+          onBack={onBack}
+          passName={
+            liveSession.session
+              .pass_snapshot
+              ?.name ??
+            "Pro-pass"
+          }
+          equipmentName={
+            equipmentName
+          }
+          pulseDeviceName={
+            pulseDeviceName
+          }
+          bikeConnected={
+            bikeConnected
+          }
+          pulseConnected={
+            pulseConnected
+          }
+          heartRate={
+            heartRate
+          }
+          powerWatts={
+            powerWatts
+          }
+          cadenceRpm={
+            cadenceRpm
+          }
+        />
+      );
+    }
+
+    if (
+      status ===
+      "countdown"
+    ) {
+      return (
+        <CountdownScreen
+          onBack={onBack}
+          passName={
+            liveSession.session
+              .pass_snapshot
+              ?.name ??
+            "Pro-pass"
+          }
+          seconds={
+            liveSession
+              .countdownRemainingSeconds
+          }
+        />
+      );
+    }
+
     return (
       <ProSessionView
         onBack={onBack}
+        passName={
+          liveSession.session
+            .pass_snapshot
+            ?.name ??
+          "Spinning"
+        }
+        sessionStatus={
+          status
+        }
         live={
-          anySensorConnected
+          status ===
+            "running" ||
+          status ===
+            "paused"
         }
         equipmentName={
           equipmentName
@@ -581,17 +881,19 @@ export default function SpinningView({
         pulseConnected={
           pulseConnected
         }
+        blocks={proBlocks}
         currentBlock={
-          sessionInfo.block
+          currentBlock
         }
         currentBlockIndex={
-          sessionInfo.index
+          currentBlockIndex
         }
         blockRemaining={
-          sessionInfo.remainingInBlock
+          blockRemaining
         }
         sessionElapsed={
-          sessionElapsed
+          liveSession
+            .currentPositionSeconds
         }
         powerWatts={
           powerWatts
@@ -629,12 +931,19 @@ export default function SpinningView({
       style={styles.container}
     >
       <View
-        style={styles.screenContent}
+        style={
+          styles.screenContent
+        }
       >
         <TopBar
           onBack={onBack}
           live={
             anySensorConnected
+          }
+          label={
+            anySensorConnected
+              ? "LIVE"
+              : "VÄNTAR"
           }
         />
 
@@ -649,7 +958,9 @@ export default function SpinningView({
         />
 
         <View
-          style={styles.sensorRow}
+          style={
+            styles.sensorRow
+          }
         >
           <SensorCard
             label="CYKEL"
@@ -710,13 +1021,18 @@ export default function SpinningView({
         </View>
 
         <View
-          style={styles.mainMetrics}
+          style={
+            styles.mainMetrics
+          }
         >
           <MainMetric
             label="EFFEKT"
             value={
-              powerWatts !== null
-                ? String(powerWatts)
+              powerWatts !==
+              null
+                ? String(
+                    powerWatts
+                  )
                 : "--"
             }
             unit="W"
@@ -731,7 +1047,8 @@ export default function SpinningView({
           <MainMetric
             label="KADENS"
             value={
-              cadenceRpm !== null
+              cadenceRpm !==
+              null
                 ? String(
                     Math.round(
                       cadenceRpm
@@ -751,8 +1068,11 @@ export default function SpinningView({
           <MainMetric
             label="PULS"
             value={
-              heartRate !== null
-                ? String(heartRate)
+              heartRate !==
+              null
+                ? String(
+                    heartRate
+                  )
                 : "--"
             }
             unit="BPM"
@@ -799,13 +1119,16 @@ export default function SpinningView({
                 styles.ftpDescription
               }
             >
-              Mockvärde: {MOCK_FTP} W
+              Testvärde:{" "}
+              {MOCK_FTP} W
             </Text>
           </View>
         </View>
 
         <View
-          style={styles.bottomArea}
+          style={
+            styles.bottomArea
+          }
         >
           {activityState ===
           "recording" ? (
@@ -843,72 +1166,42 @@ export default function SpinningView({
               </Text>
             </Pressable>
           )}
-
-          <Pressable
-            style={
-              styles.joinButton
-            }
-          >
-            <Text
-              style={
-                styles.joinButtonText
-              }
-            >
-              Anslut till pass
-            </Text>
-          </Pressable>
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
-/*
- * PRO-PASS
- */
-function ProSessionView({
+function WaitingScreen({
   onBack,
-  live,
+  passName,
   equipmentName,
   pulseDeviceName,
   bikeConnected,
   pulseConnected,
-  currentBlock,
-  currentBlockIndex,
-  blockRemaining,
-  sessionElapsed,
+  heartRate,
   powerWatts,
   cadenceRpm,
-  heartRate,
-  currentFtpPercent,
-  activityState,
-  elapsedSeconds,
-  startTraining,
-  stopTraining,
 }: {
   onBack: () => void;
-  live: boolean;
-  equipmentName: string | null;
-  pulseDeviceName: string | null;
+  passName: string;
+  equipmentName:
+    | string
+    | null;
+  pulseDeviceName:
+    | string
+    | null;
   bikeConnected: boolean;
   pulseConnected: boolean;
-  currentBlock: ProBlock;
-  currentBlockIndex: number;
-  blockRemaining: number;
-  sessionElapsed: number;
-  powerWatts: number | null;
-  cadenceRpm: number | null;
-  heartRate: number | null;
-  currentFtpPercent:
+  heartRate:
     | number
     | null;
-  activityState:
-    | "idle"
-    | "recording"
-    | "finished";
-  elapsedSeconds: number;
-  startTraining: () => void;
-  stopTraining: () => void;
+  powerWatts:
+    | number
+    | null;
+  cadenceRpm:
+    | number
+    | null;
 }) {
   return (
     <SafeAreaView
@@ -921,16 +1214,19 @@ function ProSessionView({
       >
         <TopBar
           onBack={onBack}
-          live={live}
+          live
+          label="ANSLUTEN"
         />
 
         <ProHeader
           title="Spinning"
-          subtitle="Training Player Pro"
+          subtitle={passName}
         />
 
         <View
-          style={styles.sensorRow}
+          style={
+            styles.sensorRow
+          }
         >
           <SensorCard
             label="CYKEL"
@@ -954,6 +1250,408 @@ function ProSessionView({
             }
           />
         </View>
+
+        <View
+          style={
+            styles.waitingCard
+          }
+        >
+          <Text
+            style={
+              styles.blockEyebrow
+            }
+          >
+            VÄNTAR PÅ
+            INSTRUKTÖREN
+          </Text>
+
+          <Text
+            style={
+              styles.waitingTitle
+            }
+          >
+            Redo
+          </Text>
+
+          <Text
+            style={
+              styles.waitingText
+            }
+          >
+            Passet startar
+            automatiskt när
+            instruktören trycker
+            start.
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.proMetrics
+          }
+        >
+          <MainMetric
+            label="WATT"
+            value={
+              powerWatts !==
+              null
+                ? String(
+                    powerWatts
+                  )
+                : "--"
+            }
+            unit="W"
+          />
+
+          <View
+            style={
+              styles.metricDivider
+            }
+          />
+
+          <MainMetric
+            label="RPM"
+            value={
+              cadenceRpm !==
+              null
+                ? String(
+                    Math.round(
+                      cadenceRpm
+                    )
+                  )
+                : "--"
+            }
+            unit="RPM"
+          />
+
+          <View
+            style={
+              styles.metricDivider
+            }
+          />
+
+          <MainMetric
+            label="PULS"
+            value={
+              heartRate !==
+              null
+                ? String(
+                    heartRate
+                  )
+                : "--"
+            }
+            unit="BPM"
+          />
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function CountdownScreen({
+  onBack,
+  passName,
+  seconds,
+}: {
+  onBack: () => void;
+  passName: string;
+  seconds: number;
+}) {
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      <View
+        style={
+          styles.proScreenContent
+        }
+      >
+        <TopBar
+          onBack={onBack}
+          live
+          label="STARTAR"
+        />
+
+        <ProHeader
+          title="Spinning"
+          subtitle={passName}
+        />
+
+        <View
+          style={
+            styles.countdownArea
+          }
+        >
+          <Text
+            style={
+              styles.blockEyebrow
+            }
+          >
+            PASS STARTAR OM
+          </Text>
+
+          <Text
+            style={
+              styles.countdownValue
+            }
+          >
+            {seconds}
+          </Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function StatusScreen({
+  onBack,
+  title,
+  subtitle,
+}: {
+  onBack: () => void;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      <View
+        style={
+          styles.proScreenContent
+        }
+      >
+        <TopBar
+          onBack={onBack}
+          live={false}
+          label="VÄNTAR"
+        />
+
+        <View
+          style={
+            styles.statusCenter
+          }
+        >
+          <Text
+            style={
+              styles.statusTitle
+            }
+          >
+            {title}
+          </Text>
+
+          {subtitle ? (
+            <Text
+              style={
+                styles.statusSubtitle
+              }
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function ProSessionView({
+  onBack,
+  passName,
+  sessionStatus,
+  live,
+  equipmentName,
+  pulseDeviceName,
+  bikeConnected,
+  pulseConnected,
+  blocks,
+  currentBlock,
+  currentBlockIndex,
+  blockRemaining,
+  sessionElapsed,
+  powerWatts,
+  cadenceRpm,
+  heartRate,
+  currentFtpPercent,
+  activityState,
+  elapsedSeconds,
+  startTraining,
+  stopTraining,
+}: {
+  onBack: () => void;
+  passName: string;
+  sessionStatus: string;
+  live: boolean;
+  equipmentName:
+    | string
+    | null;
+  pulseDeviceName:
+    | string
+    | null;
+  bikeConnected: boolean;
+  pulseConnected: boolean;
+  blocks:
+    DisplayBlock[];
+  currentBlock:
+    | DisplayBlock
+    | null;
+  currentBlockIndex: number;
+  blockRemaining: number;
+  sessionElapsed: number;
+  powerWatts:
+    | number
+    | null;
+  cadenceRpm:
+    | number
+    | null;
+  heartRate:
+    | number
+    | null;
+  currentFtpPercent:
+    | number
+    | null;
+  activityState:
+    | "idle"
+    | "recording"
+    | "finished";
+  elapsedSeconds: number;
+  startTraining:
+    () => void;
+  stopTraining:
+    () => void;
+}) {
+  const paused =
+    sessionStatus ===
+    "paused";
+
+  const finished =
+    sessionStatus ===
+    "finished";
+
+  /*
+   * Position i hela passets grafiska tidslinje.
+   * Bygger på instruktörens master-klocka.
+   */
+  const totalSessionSeconds =
+    blocks.reduce(
+      (sum, block) =>
+        sum +
+        block.durationSeconds,
+      0
+    );
+
+  const timelineProgress =
+    totalSessionSeconds > 0
+      ? Math.min(
+          1,
+          Math.max(
+            0,
+            sessionElapsed /
+              totalSessionSeconds
+          )
+        )
+      : 0;
+
+  const timelineProgressPercent =
+    timelineProgress * 100;
+
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      <View
+        style={
+          styles.proScreenContent
+        }
+      >
+        <TopBar
+          onBack={onBack}
+          live={live}
+          label={
+            finished
+              ? "AVSLUTAT"
+              : paused
+              ? "PAUS"
+              : "LIVE"
+          }
+        />
+
+        <ProHeader
+          title="Spinning"
+          subtitle={passName}
+        />
+
+        <View
+          style={
+            styles.sensorRow
+          }
+        >
+          <SensorCard
+            label="CYKEL"
+            value={
+              equipmentName ??
+              "Ej ansluten"
+            }
+            connected={
+              bikeConnected
+            }
+          />
+
+          <SensorCard
+            label="PULS"
+            value={
+              pulseDeviceName ??
+              "Ej ansluten"
+            }
+            connected={
+              pulseConnected
+            }
+          />
+        </View>
+
+        {finished && (
+          <View
+            style={
+              styles.finishedBanner
+            }
+          >
+            <Text
+              style={
+                styles.finishedTitle
+              }
+            >
+              Instruktörens pass är
+              avslutat
+            </Text>
+
+            <Text
+              style={
+                styles.finishedText
+              }
+            >
+              Din egen
+              träningsregistrering
+              stoppas inte
+              automatiskt.
+            </Text>
+          </View>
+        )}
+
+        {paused && (
+          <View
+            style={
+              styles.pauseBanner
+            }
+          >
+            <Text
+              style={
+                styles.pauseText
+              }
+            >
+              PASS PAUSAT
+            </Text>
+          </View>
+        )}
 
         <View
           style={
@@ -1007,30 +1705,55 @@ function ProSessionView({
 
         <View
           style={
-            styles.profileRow
+            styles.profileWrapper
           }
         >
-          {mockBlocks.map(
-            (block, index) => (
-              <View
-                key={block.id}
-                style={[
-                  styles.profileSegment,
-                  {
-                    flex:
-                      block.durationSeconds,
-                    backgroundColor:
-                      block.color,
-                    opacity:
-                      index ===
-                      currentBlockIndex
-                        ? 1
-                        : 0.35,
-                  },
-                ]}
-              />
-            )
-          )}
+          <View
+            style={
+              styles.profileRow
+            }
+          >
+            {blocks.map(
+              (
+                block,
+                index
+              ) => (
+                <View
+                  key={block.id}
+                  style={[
+                    styles.profileSegment,
+                    {
+                      flex:
+                        Math.max(
+                          1,
+                          block.durationSeconds
+                        ),
+                      backgroundColor:
+                        block.color,
+                      opacity:
+                        index ===
+                        currentBlockIndex
+                          ? 1
+                          : 0.35,
+                    },
+                  ]}
+                />
+              )
+            )}
+          </View>
+
+          {blocks.length > 0 ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.profileMarker,
+                {
+                  left:
+                    `${timelineProgressPercent}%` as `${number}%`,
+                },
+              ]}
+            />
+          ) : null}
         </View>
 
         <View
@@ -1038,7 +1761,9 @@ function ProSessionView({
             styles.blockCard,
             {
               borderTopColor:
-                currentBlock.color,
+                currentBlock
+                  ?.color ??
+                "#E31836",
             },
           ]}
         >
@@ -1055,18 +1780,24 @@ function ProSessionView({
               styles.blockTitle
             }
           >
-            {currentBlock.title}
+            {currentBlock
+              ?.title ??
+              "Pass"}
           </Text>
 
-          <Text
-            style={
-              styles.blockInstruction
-            }
-          >
-            {
-              currentBlock.instruction
-            }
-          </Text>
+          {!!currentBlock
+            ?.instruction && (
+            <Text
+              style={
+                styles.blockInstruction
+              }
+            >
+              {
+                currentBlock
+                  .instruction
+              }
+            </Text>
+          )}
 
           <View
             style={
@@ -1075,12 +1806,26 @@ function ProSessionView({
           >
             <Target
               label="MÅL %FTP"
-              value={`${currentBlock.targetFtpMin}–${currentBlock.targetFtpMax}`}
+              value={rangeText(
+                currentBlock
+                  ?.targetFtpMin ??
+                  null,
+                currentBlock
+                  ?.targetFtpMax ??
+                  null
+              )}
             />
 
             <Target
               label="MÅL RPM"
-              value={`${currentBlock.targetRpmMin}–${currentBlock.targetRpmMax}`}
+              value={rangeText(
+                currentBlock
+                  ?.targetRpmMin ??
+                  null,
+                currentBlock
+                  ?.targetRpmMax ??
+                  null
+              )}
             />
           </View>
         </View>
@@ -1112,7 +1857,8 @@ function ProSessionView({
           <MainMetric
             label="RPM"
             value={
-              cadenceRpm !== null
+              cadenceRpm !==
+              null
                 ? String(
                     Math.round(
                       cadenceRpm
@@ -1132,8 +1878,11 @@ function ProSessionView({
           <MainMetric
             label="PULS"
             value={
-              heartRate !== null
-                ? String(heartRate)
+              heartRate !==
+              null
+                ? String(
+                    heartRate
+                  )
                 : "--"
             }
             unit="BPM"
@@ -1159,7 +1908,8 @@ function ProSessionView({
                 styles.secondaryValue
               }
             >
-              {powerWatts !== null
+              {powerWatts !==
+              null
                 ? `${powerWatts} W`
                 : "-- W"}
             </Text>
@@ -1185,6 +1935,11 @@ function ProSessionView({
             >
               {activityState ===
               "recording"
+                ? formatTrainingTime(
+                    elapsedSeconds
+                  )
+                : activityState ===
+                  "finished"
                 ? formatTrainingTime(
                     elapsedSeconds
                   )
@@ -1243,17 +1998,23 @@ function ProSessionView({
 function TopBar({
   onBack,
   live,
+  label,
 }: {
   onBack: () => void;
   live: boolean;
+  label: string;
 }) {
   return (
-    <View style={styles.topBar}>
+    <View
+      style={styles.topBar}
+    >
       <Pressable
         onPress={onBack}
         hitSlop={12}
       >
-        <Text style={styles.back}>
+        <Text
+          style={styles.back}
+        >
           ‹ Avsluta
         </Text>
       </Pressable>
@@ -1274,11 +2035,11 @@ function TopBar({
         />
 
         <Text
-          style={styles.liveText}
+          style={
+            styles.liveText
+          }
         >
-          {live
-            ? "LIVE"
-            : "VÄNTAR"}
+          {label}
         </Text>
       </View>
     </View>
@@ -1296,7 +2057,9 @@ function SensorCard({
 }) {
   return (
     <View
-      style={styles.sensorCard}
+      style={
+        styles.sensorCard
+      }
     >
       <View
         style={
@@ -1343,16 +2106,22 @@ function MainMetric({
 }) {
   return (
     <View
-      style={styles.mainMetric}
+      style={
+        styles.mainMetric
+      }
     >
       <Text
-        style={styles.metricLabel}
+        style={
+          styles.metricLabel
+        }
       >
         {label}
       </Text>
 
       <Text
-        style={styles.metricValue}
+        style={
+          styles.metricValue
+        }
         numberOfLines={1}
         adjustsFontSizeToFit
       >
@@ -1360,7 +2129,9 @@ function MainMetric({
       </Text>
 
       <Text
-        style={styles.metricUnit}
+        style={
+          styles.metricUnit
+        }
       >
         {unit}
       </Text>
@@ -1376,7 +2147,9 @@ function Target({
   value: string;
 }) {
   return (
-    <View style={styles.target}>
+    <View
+      style={styles.target}
+    >
       <Text
         style={
           styles.targetLabel
@@ -1400,7 +2173,8 @@ const styles =
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#0b0b0d",
+      backgroundColor:
+        "#0b0b0d",
     },
 
     screenContent: {
@@ -1438,22 +2212,26 @@ const styles =
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 999,
-      backgroundColor: "#202023",
+      backgroundColor:
+        "#202023",
     },
 
     liveBadgeActive: {
-      backgroundColor: "#16261b",
+      backgroundColor:
+        "#16261b",
     },
 
     liveDot: {
       width: 7,
       height: 7,
       borderRadius: 4,
-      backgroundColor: "#66666b",
+      backgroundColor:
+        "#66666b",
     },
 
     liveDotActive: {
-      backgroundColor: "#48c968",
+      backgroundColor:
+        "#48c968",
     },
 
     liveText: {
@@ -1472,7 +2250,8 @@ const styles =
     sensorCard: {
       flex: 1,
       minWidth: 0,
-      backgroundColor: "#18181b",
+      backgroundColor:
+        "#18181b",
       borderRadius: 15,
       paddingHorizontal: 14,
       paddingVertical: 10,
@@ -1488,11 +2267,13 @@ const styles =
       width: 7,
       height: 7,
       borderRadius: 4,
-      backgroundColor: "#65656a",
+      backgroundColor:
+        "#65656a",
     },
 
     sensorDotActive: {
-      backgroundColor: "#48c968",
+      backgroundColor:
+        "#48c968",
     },
 
     sensorLabel: {
@@ -1549,19 +2330,41 @@ const styles =
       ],
     },
 
+    profileWrapper: {
+      position: "relative",
+      marginTop: 13,
+      height: 26,
+      justifyContent: "center",
+    },
+
     profileRow: {
       flexDirection: "row",
       height: 12,
       gap: 3,
-      marginTop: 13,
     },
 
     profileSegment: {
       borderRadius: 4,
     },
 
+    profileMarker: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      width: 3,
+      borderRadius: 2,
+      backgroundColor: "#ffffff",
+      transform: [
+        {
+          translateX: -1.5,
+        },
+      ],
+      zIndex: 10,
+    },
+
     blockCard: {
-      backgroundColor: "#18181b",
+      backgroundColor:
+        "#18181b",
       borderRadius: 20,
       padding: 17,
       marginTop: 13,
@@ -1596,7 +2399,8 @@ const styles =
 
     target: {
       flex: 1,
-      backgroundColor: "#222225",
+      backgroundColor:
+        "#222225",
       borderRadius: 13,
       padding: 11,
     },
@@ -1617,7 +2421,8 @@ const styles =
 
     proMetrics: {
       flexDirection: "row",
-      backgroundColor: "#18181b",
+      backgroundColor:
+        "#18181b",
       borderRadius: 20,
       marginTop: 11,
       paddingVertical: 14,
@@ -1626,7 +2431,8 @@ const styles =
 
     mainMetrics: {
       flexDirection: "row",
-      backgroundColor: "#18181b",
+      backgroundColor:
+        "#18181b",
       borderRadius: 22,
       marginTop: 22,
       paddingVertical: 20,
@@ -1641,7 +2447,8 @@ const styles =
 
     metricDivider: {
       width: 1,
-      backgroundColor: "#303034",
+      backgroundColor:
+        "#303034",
       marginVertical: 3,
     },
 
@@ -1671,7 +2478,8 @@ const styles =
       flexDirection: "row",
       justifyContent:
         "space-between",
-      backgroundColor: "#141416",
+      backgroundColor:
+        "#141416",
       borderRadius: 14,
       padding: 12,
       marginTop: 8,
@@ -1701,14 +2509,16 @@ const styles =
     },
 
     proStartButton: {
-      backgroundColor: "#E31836",
+      backgroundColor:
+        "#E31836",
       borderRadius: 17,
       alignItems: "center",
       paddingVertical: 15,
     },
 
     proStopButton: {
-      backgroundColor: "#ffffff",
+      backgroundColor:
+        "#ffffff",
       borderRadius: 17,
       alignItems: "center",
       paddingVertical: 15,
@@ -1747,7 +2557,8 @@ const styles =
     ftpRow: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "#151517",
+      backgroundColor:
+        "#151517",
       borderRadius: 18,
       padding: 15,
       marginTop: 10,
@@ -1783,7 +2594,8 @@ const styles =
     },
 
     primaryButton: {
-      backgroundColor: "#E31836",
+      backgroundColor:
+        "#E31836",
       borderRadius: 18,
       alignItems: "center",
       paddingVertical: 17,
@@ -1796,7 +2608,8 @@ const styles =
     },
 
     stopButton: {
-      backgroundColor: "#ffffff",
+      backgroundColor:
+        "#ffffff",
       borderRadius: 18,
       alignItems: "center",
       paddingVertical: 17,
@@ -1808,15 +2621,102 @@ const styles =
       fontWeight: "800",
     },
 
-    joinButton: {
+    waitingCard: {
+      backgroundColor:
+        "#18181b",
+      borderRadius: 22,
+      padding: 24,
+      marginTop: 30,
       alignItems: "center",
-      paddingVertical: 13,
+    },
+
+    waitingTitle: {
+      color: "#ffffff",
+      fontSize: 42,
+      fontWeight: "800",
+      marginTop: 8,
+    },
+
+    waitingText: {
+      color: "#8d8d93",
+      fontSize: 14,
+      textAlign: "center",
+      lineHeight: 20,
+      marginTop: 10,
+    },
+
+    countdownArea: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    countdownValue: {
+      color: "#ffffff",
+      fontSize: 130,
+      lineHeight: 145,
+      fontWeight: "800",
+      fontVariant: [
+        "tabular-nums",
+      ],
+    },
+
+    pauseBanner: {
+      marginTop: 10,
+      backgroundColor:
+        "#3a2e16",
+      borderRadius: 12,
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+
+    pauseText: {
+      color: "#ffffff",
+      fontWeight: "800",
+      letterSpacing: 1.5,
+      fontSize: 12,
+    },
+
+    finishedBanner: {
+      marginTop: 10,
+      backgroundColor:
+        "#2b2022",
+      borderRadius: 14,
+      padding: 12,
+    },
+
+    finishedTitle: {
+      color: "#ffffff",
+      fontWeight: "800",
+      fontSize: 14,
+    },
+
+    finishedText: {
+      color: "#aaaab0",
+      fontSize: 11,
       marginTop: 3,
     },
 
-    joinButtonText: {
-      color: "#98989d",
+    statusCenter: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      paddingHorizontal: 20,
+    },
+
+    statusTitle: {
+      color: "#ffffff",
+      fontSize: 25,
+      fontWeight: "800",
+      textAlign: "center",
+    },
+
+    statusSubtitle: {
+      color: "#8e8e94",
       fontSize: 14,
-      fontWeight: "700",
+      textAlign: "center",
+      marginTop: 10,
     },
   });

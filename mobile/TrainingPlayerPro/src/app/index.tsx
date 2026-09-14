@@ -13,11 +13,17 @@ import {
 } from "react-native";
 
 import DeviceManager, {
+  TrainingMode,
   TrainingSetup,
 } from "../components/DeviceManager";
 
 import SpinningView from "../components/SpinningView";
 import IndoorWalkingView from "../components/IndoorWalkingView";
+import ActiveSessionsView from "../components/ActiveSessionsView";
+
+import {
+  LiveSession,
+} from "../types/liveSession";
 
 import {
   useTabBar,
@@ -26,27 +32,113 @@ import {
 type Screen =
   | "home"
   | "devices"
+  | "sessions"
+  | "session-devices"
   | "spinning"
   | "indoor-walking";
 
+function activityToMode(
+  activity: unknown
+): TrainingMode | null {
+  if (!activity) {
+    return null;
+  }
+
+  if (
+    typeof activity ===
+    "object"
+  ) {
+    const objectActivity =
+      activity as {
+        name?: unknown;
+        label?: unknown;
+        id?: unknown;
+        slug?: unknown;
+        value?: unknown;
+      };
+
+    return activityToMode(
+      objectActivity.name ??
+        objectActivity.label ??
+        objectActivity.slug ??
+        objectActivity.value ??
+        objectActivity.id
+    );
+  }
+
+  const value =
+    String(activity)
+      .trim()
+      .toLowerCase();
+
+  if (
+    value.includes(
+      "spinning"
+    ) ||
+    value.includes(
+      "cycling"
+    ) ||
+    value.includes("cykel")
+  ) {
+    return "spinning";
+  }
+
+  if (
+    value.includes(
+      "indoor walking"
+    ) ||
+    value.includes(
+      "indoor-walking"
+    ) ||
+    value.includes(
+      "indoor_walking"
+    ) ||
+    value.includes(
+      "walking"
+    )
+  ) {
+    return "indoor-walking";
+  }
+
+  return null;
+}
+
 export default function HomeScreen() {
-  const [screen, setScreen] =
+  const [
+    screen,
+    setScreen,
+  ] =
     useState<Screen>("home");
 
-  const [setup, setSetup] =
+  const [
+    setup,
+    setSetup,
+  ] =
     useState<TrainingSetup | null>(
       null
     );
 
-  const { setTabBarHidden } =
-    useTabBar();
+  const [
+    selectedSession,
+    setSelectedSession,
+  ] =
+    useState<LiveSession | null>(
+      null
+    );
+
+  const {
+    setTabBarHidden,
+  } = useTabBar();
 
   const workoutOpen =
     screen === "spinning" ||
-    screen === "indoor-walking";
+    screen ===
+      "indoor-walking";
 
   useEffect(() => {
-    setTabBarHidden(workoutOpen);
+    setTabBarHidden(
+      workoutOpen
+    );
 
     return () => {
       setTabBarHidden(false);
@@ -56,35 +148,144 @@ export default function HomeScreen() {
     setTabBarHidden,
   ]);
 
-  const handleReady = (
-    trainingSetup: TrainingSetup
-  ) => {
-    setSetup(trainingSetup);
+  const openStandaloneDevices =
+    () => {
+      setSelectedSession(
+        null
+      );
 
-    if (
-      trainingSetup.mode ===
-      "spinning"
-    ) {
-      setScreen("spinning");
-      return;
-    }
+      setScreen("devices");
+    };
 
-    setScreen("indoor-walking");
-  };
+  const handleStandaloneReady =
+    (
+      trainingSetup:
+        TrainingSetup
+    ) => {
+      setSetup(
+        trainingSetup
+      );
+
+      if (
+        trainingSetup.mode ===
+        "spinning"
+      ) {
+        setScreen("spinning");
+        return;
+      }
+
+      setScreen(
+        "indoor-walking"
+      );
+    };
+
+  const handleSelectSession =
+    (
+      session: LiveSession
+    ) => {
+      setSelectedSession(
+        session
+      );
+
+      setScreen(
+        "session-devices"
+      );
+    };
+
+  const handleSessionReady =
+    (
+      trainingSetup:
+        TrainingSetup
+    ) => {
+      setSetup(
+        trainingSetup
+      );
+
+      if (
+        trainingSetup.mode ===
+        "spinning"
+      ) {
+        setScreen("spinning");
+        return;
+      }
+
+      setScreen(
+        "indoor-walking"
+      );
+    };
 
   const closeWorkout = () => {
+    setSetup(null);
+    setSelectedSession(
+      null
+    );
     setScreen("home");
   };
 
-  /*
-   * DEVICE MANAGER
-   */
-  if (screen === "devices") {
+  if (
+    screen === "devices"
+  ) {
     return (
       <DeviceManager
-        onReady={handleReady}
+        onReady={
+          handleStandaloneReady
+        }
         onBack={() =>
           setScreen("home")
+        }
+      />
+    );
+  }
+
+  if (
+    screen === "sessions"
+  ) {
+    return (
+      <ActiveSessionsView
+        onBack={() =>
+          setScreen("home")
+        }
+        onSelect={
+          handleSelectSession
+        }
+      />
+    );
+  }
+
+  if (
+    screen ===
+      "session-devices" &&
+    selectedSession
+  ) {
+    const mode =
+      activityToMode(
+        selectedSession
+          .pass_snapshot
+          ?.activity
+      );
+
+    /*
+     * Om activity saknas eller
+     * kommer i okänt format
+     * låter vi användaren välja
+     * träningsform manuellt.
+     */
+    return (
+      <DeviceManager
+        initialMode={mode}
+        proPassName={
+          selectedSession
+            .pass_snapshot
+            ?.name ??
+          "Pro-pass"
+        }
+        onBack={() =>
+          setScreen(
+            "sessions"
+          )
+        }
+        onReady={
+          handleSessionReady
         }
       />
     );
@@ -93,28 +294,40 @@ export default function HomeScreen() {
   return (
     <>
       <SafeAreaView
-        style={styles.container}
+        style={
+          styles.container
+        }
       >
         <View
-          style={styles.content}
+          style={
+            styles.content
+          }
         >
           <Text
-            style={styles.brand}
+            style={
+              styles.brand
+            }
           >
             Friskis
           </Text>
 
           <View
-            style={styles.titleRow}
+            style={
+              styles.titleRow
+            }
           >
             <Text
-              style={styles.title}
+              style={
+                styles.title
+              }
             >
               Training Player Pro
             </Text>
 
             <View
-              style={styles.badge}
+              style={
+                styles.badge
+              }
             >
               <Text
                 style={
@@ -130,8 +343,8 @@ export default function HomeScreen() {
             style={
               styles.primaryButton
             }
-            onPress={() =>
-              setScreen("devices")
+            onPress={
+              openStandaloneDevices
             }
           >
             <Text
@@ -147,6 +360,11 @@ export default function HomeScreen() {
             style={
               styles.secondaryButton
             }
+            onPress={() =>
+              setScreen(
+                "sessions"
+              )
+            }
           >
             <Text
               style={
@@ -158,11 +376,14 @@ export default function HomeScreen() {
           </Pressable>
 
           <Text
-            style={styles.info}
+            style={
+              styles.info
+            }
           >
             Du kan börja träna
-            fristående och ansluta till
-            instruktörens pass senare.
+            fristående och ansluta
+            till instruktörens pass
+            senare.
           </Text>
         </View>
       </SafeAreaView>
@@ -178,10 +399,15 @@ export default function HomeScreen() {
           closeWorkout
         }
       >
-        {screen === "spinning" &&
+        {screen ===
+          "spinning" &&
         setup ? (
           <SpinningView
             setup={setup}
+            sessionId={
+              selectedSession
+                ?.id ?? null
+            }
             onBack={
               closeWorkout
             }
@@ -207,13 +433,15 @@ const styles =
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#ffffff",
+      backgroundColor:
+        "#ffffff",
     },
 
     content: {
       flex: 1,
       paddingHorizontal: 24,
-      justifyContent: "center",
+      justifyContent:
+        "center",
     },
 
     brand: {
@@ -237,7 +465,8 @@ const styles =
     },
 
     badge: {
-      backgroundColor: "#E31836",
+      backgroundColor:
+        "#E31836",
       paddingHorizontal: 10,
       paddingVertical: 5,
       borderRadius: 999,
@@ -250,7 +479,8 @@ const styles =
     },
 
     primaryButton: {
-      backgroundColor: "#E31836",
+      backgroundColor:
+        "#E31836",
       paddingVertical: 18,
       borderRadius: 14,
       alignItems: "center",

@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import {
   Pressable,
   SafeAreaView,
@@ -36,54 +41,111 @@ export type TrainingSetup = {
 };
 
 type Props = {
-  onReady: (setup: TrainingSetup) => void;
+  onReady: (
+    setup: TrainingSetup
+  ) => void;
+
   onBack: () => void;
+
+  initialMode?: TrainingMode | null;
+
+  proPassName?: string | null;
 };
 
-const HEART_RATE_SERVICE = "180D";
-const RSC_SERVICE = "1814";
-const CYCLING_POWER_SERVICE = "1818";
-const FTMS_SERVICE = "1826";
+const HEART_RATE_SERVICE =
+  "180D";
+
+const RSC_SERVICE =
+  "1814";
+
+const CYCLING_POWER_SERVICE =
+  "1818";
+
+const FTMS_SERVICE =
+  "1826";
 
 export default function DeviceManager({
   onReady,
   onBack,
+  initialMode = null,
+  proPassName = null,
 }: Props) {
-  const manager = useRef(new BleManager()).current;
+  const manager =
+    useRef(
+      new BleManager()
+    ).current;
 
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [scanning, setScanning] = useState(false);
+  const [
+    devices,
+    setDevices,
+  ] = useState<Device[]>([]);
 
-  const [connectingId, setConnectingId] =
-    useState<string | null>(null);
+  const [
+    scanning,
+    setScanning,
+  ] = useState(false);
 
-  const [equipment, setEquipment] =
-    useState<ConnectedDevice | null>(null);
+  const [
+    connectingId,
+    setConnectingId,
+  ] = useState<string | null>(
+    null
+  );
 
-  const [heartRateDevice, setHeartRateDevice] =
-    useState<ConnectedDevice | null>(null);
-
-  const [selectedMode, setSelectedMode] =
-    useState<TrainingMode | null>(null);
-
-  const [showOtherDevices, setShowOtherDevices] =
-    useState(false);
-
-  const scanTimer =
-    useRef<ReturnType<typeof setTimeout> | null>(
+  const [
+    equipment,
+    setEquipment,
+  ] =
+    useState<ConnectedDevice | null>(
       null
     );
 
-  const shortUuid = (uuid: string) => {
-    const upper = uuid.toUpperCase();
+  const [
+    heartRateDevice,
+    setHeartRateDevice,
+  ] =
+    useState<ConnectedDevice | null>(
+      null
+    );
+
+  const [
+    selectedMode,
+    setSelectedMode,
+  ] =
+    useState<TrainingMode | null>(
+      initialMode
+    );
+
+  const [
+    showOtherDevices,
+    setShowOtherDevices,
+  ] = useState(false);
+
+  const scanTimer =
+    useRef<
+      ReturnType<
+        typeof setTimeout
+      > | null
+    >(null);
+
+  const shortUuid = (
+    uuid: string
+  ) => {
+    const upper =
+      uuid.toUpperCase();
 
     if (
-      upper.startsWith("0000") &&
+      upper.startsWith(
+        "0000"
+      ) &&
       upper.includes(
         "-0000-1000-8000-00805F9B34FB"
       )
     ) {
-      return upper.substring(4, 8);
+      return upper.substring(
+        4,
+        8
+      );
     }
 
     return upper;
@@ -93,7 +155,9 @@ export default function DeviceManager({
     manager.stopDeviceScan();
 
     if (scanTimer.current) {
-      clearTimeout(scanTimer.current);
+      clearTimeout(
+        scanTimer.current
+      );
     }
 
     setDevices([]);
@@ -102,7 +166,10 @@ export default function DeviceManager({
     manager.startDeviceScan(
       null,
       null,
-      (error, device) => {
+      (
+        error,
+        device
+      ) => {
         if (error) {
           console.log(
             "BLE scan error:",
@@ -113,29 +180,45 @@ export default function DeviceManager({
           return;
         }
 
-        if (!device) return;
+        if (!device) {
+          return;
+        }
 
         const name =
           device.name ||
           device.localName;
 
-        if (!name) return;
+        if (!name) {
+          return;
+        }
 
-        setDevices((current) => {
-          const index =
-            current.findIndex(
-              (item) =>
-                item.id === device.id
-            );
+        setDevices(
+          (current) => {
+            const index =
+              current.findIndex(
+                (item) =>
+                  item.id ===
+                  device.id
+              );
 
-          if (index >= 0) {
-            const copy = [...current];
-            copy[index] = device;
-            return copy;
+            if (
+              index >= 0
+            ) {
+              const copy =
+                [...current];
+
+              copy[index] =
+                device;
+
+              return copy;
+            }
+
+            return [
+              ...current,
+              device,
+            ];
           }
-
-          return [...current, device];
-        });
+        );
       }
     );
 
@@ -155,7 +238,9 @@ export default function DeviceManager({
     return () => {
       clearTimeout(timer);
 
-      if (scanTimer.current) {
+      if (
+        scanTimer.current
+      ) {
         clearTimeout(
           scanTimer.current
         );
@@ -165,65 +250,72 @@ export default function DeviceManager({
     };
   }, []);
 
-  const advertisedCapabilities = (
-    device: Device
-  ): Capability[] => {
-    const advertised =
-      device.serviceUUIDs?.map(
-        shortUuid
-      ) ?? [];
+  const advertisedCapabilities =
+    (
+      device: Device
+    ): Capability[] => {
+      const advertised =
+        device.serviceUUIDs?.map(
+          shortUuid
+        ) ?? [];
 
-    const result: Capability[] = [];
+      const result:
+        Capability[] = [];
 
-    if (
-      advertised.includes(
-        HEART_RATE_SERVICE
-      )
-    ) {
-      result.push("heart-rate");
-    }
+      if (
+        advertised.includes(
+          HEART_RATE_SERVICE
+        )
+      ) {
+        result.push(
+          "heart-rate"
+        );
+      }
 
-    if (
-      advertised.includes(
-        RSC_SERVICE
-      )
-    ) {
-      result.push(
-        "running-speed-cadence"
-      );
-    }
+      if (
+        advertised.includes(
+          RSC_SERVICE
+        )
+      ) {
+        result.push(
+          "running-speed-cadence"
+        );
+      }
 
-    if (
-      advertised.includes(
-        CYCLING_POWER_SERVICE
-      )
-    ) {
-      result.push(
-        "cycling-power"
-      );
-    }
+      if (
+        advertised.includes(
+          CYCLING_POWER_SERVICE
+        )
+      ) {
+        result.push(
+          "cycling-power"
+        );
+      }
 
-    if (
-      advertised.includes(
-        FTMS_SERVICE
-      )
-    ) {
-      result.push(
-        "fitness-machine"
-      );
-    }
+      if (
+        advertised.includes(
+          FTMS_SERVICE
+        )
+      ) {
+        result.push(
+          "fitness-machine"
+        );
+      }
 
-    return result;
-  };
+      return result;
+    };
 
   const looksRelevant = (
     device: Device
   ) => {
     const capabilities =
-      advertisedCapabilities(device);
+      advertisedCapabilities(
+        device
+      );
 
     if (
-      capabilities.length > 0
+      capabilities.length >
+      0
     ) {
       return true;
     }
@@ -237,15 +329,33 @@ export default function DeviceManager({
     return (
       name.includes("body") ||
       name.includes("bike") ||
-      name.includes("fenix") ||
-      name.includes("garmin") ||
-      name.includes("polar") ||
-      name.includes("wahoo") ||
-      name.includes("heart") ||
-      name.includes("hrm") ||
-      name.includes("walking") ||
-      name.includes("tread") ||
-      name.includes("fitness")
+      name.includes(
+        "fenix"
+      ) ||
+      name.includes(
+        "garmin"
+      ) ||
+      name.includes(
+        "polar"
+      ) ||
+      name.includes(
+        "wahoo"
+      ) ||
+      name.includes(
+        "heart"
+      ) ||
+      name.includes(
+        "hrm"
+      ) ||
+      name.includes(
+        "walking"
+      ) ||
+      name.includes(
+        "tread"
+      ) ||
+      name.includes(
+        "fitness"
+      )
     );
   };
 
@@ -270,7 +380,9 @@ export default function DeviceManager({
       const uuids =
         services.map(
           (service) =>
-            shortUuid(service.uuid)
+            shortUuid(
+              service.uuid
+            )
         );
 
       const capabilities:
@@ -328,7 +440,9 @@ export default function DeviceManager({
         | ConnectedDevice
         | null
     ) => {
-      if (!connected) return;
+      if (!connected) {
+        return;
+      }
 
       try {
         const isConnected =
@@ -347,104 +461,127 @@ export default function DeviceManager({
       }
     };
 
-  const connect = async (
-    device: Device
-  ) => {
-    try {
-      setConnectingId(device.id);
-
-      manager.stopDeviceScan();
-
-      const connected =
-        await discoverCapabilities(
-          device
+  const connect =
+    async (
+      device: Device
+    ) => {
+      try {
+        setConnectingId(
+          device.id
         );
 
-      const isCycling =
-        connected.capabilities.includes(
-          "cycling-power"
-        );
+        manager.stopDeviceScan();
 
-      const isFtms =
-        connected.capabilities.includes(
-          "fitness-machine"
-        );
-
-      const isEquipment =
-        isCycling || isFtms;
-
-      const isHeartRate =
-        connected.capabilities.includes(
-          "heart-rate"
-        );
-
-      if (isEquipment) {
-        if (
-          equipment &&
-          equipment.device.id !==
-            connected.device.id
-        ) {
-          await disconnectDevice(
-            equipment
+        const connected =
+          await discoverCapabilities(
+            device
           );
-        }
 
-        setEquipment(connected);
-
-        if (isCycling) {
-          setSelectedMode(
-            "spinning"
+        const isCycling =
+          connected.capabilities.includes(
+            "cycling-power"
           );
-        }
 
-        if (isFtms) {
-          setSelectedMode(
-            "indoor-walking"
+        const isFtms =
+          connected.capabilities.includes(
+            "fitness-machine"
           );
-        }
 
-        if (
-          heartRateDevice?.device.id ===
-          connected.device.id
-        ) {
-          setHeartRateDevice(
-            null
+        const isEquipment =
+          isCycling ||
+          isFtms;
+
+        const isHeartRate =
+          connected.capabilities.includes(
+            "heart-rate"
           );
-        }
-      } else if (
-        isHeartRate
-      ) {
-        if (
-          heartRateDevice &&
-          heartRateDevice.device.id !==
-            connected.device.id
-        ) {
-          await disconnectDevice(
+
+        if (isEquipment) {
+          if (
+            equipment &&
+            equipment.device
+              .id !==
+              connected.device.id
+          ) {
+            await disconnectDevice(
+              equipment
+            );
+          }
+
+          setEquipment(
+            connected
+          );
+
+          /*
+           * För fristående träning
+           * kan utrustningen hjälpa
+           * oss välja aktivitet.
+           *
+           * För Pro-pass behåller vi
+           * instruktörens aktivitet.
+           */
+          if (!initialMode) {
+            if (
+              isCycling
+            ) {
+              setSelectedMode(
+                "spinning"
+              );
+            }
+
+            if (isFtms) {
+              setSelectedMode(
+                "indoor-walking"
+              );
+            }
+          }
+
+          if (
             heartRateDevice
+              ?.device.id ===
+            connected.device.id
+          ) {
+            setHeartRateDevice(
+              null
+            );
+          }
+        } else if (
+          isHeartRate
+        ) {
+          if (
+            heartRateDevice &&
+            heartRateDevice
+              .device.id !==
+              connected.device.id
+          ) {
+            await disconnectDevice(
+              heartRateDevice
+            );
+          }
+
+          setHeartRateDevice(
+            connected
+          );
+        } else {
+          await disconnectDevice(
+            connected
           );
         }
+      } catch (error) {
+        console.log(
+          "Connection error:",
+          error
+        );
+      } finally {
+        setConnectingId(
+          null
+        );
 
-        setHeartRateDevice(
-          connected
-        );
-      } else {
-        await disconnectDevice(
-          connected
-        );
+        setTimeout(() => {
+          scan();
+        }, 300);
       }
-    } catch (error) {
-      console.log(
-        "Connection error:",
-        error
-      );
-    } finally {
-      setConnectingId(null);
-
-      setTimeout(() => {
-        scan();
-      }, 300);
-    }
-  };
+    };
 
   const removeEquipment =
     async () => {
@@ -468,11 +605,15 @@ export default function DeviceManager({
 
   const continueToTraining =
     () => {
-      if (!selectedMode) return;
+      if (!selectedMode) {
+        return;
+      }
 
       manager.stopDeviceScan();
 
-      if (scanTimer.current) {
+      if (
+        scanTimer.current
+      ) {
         clearTimeout(
           scanTimer.current
         );
@@ -489,15 +630,18 @@ export default function DeviceManager({
   const isSelected = (
     id: string
   ) =>
-    equipment?.device.id === id ||
-    heartRateDevice?.device.id ===
-      id;
+    equipment?.device.id ===
+      id ||
+    heartRateDevice?.device
+      .id === id;
 
   const availableDevices =
     [...devices]
       .filter(
         (device) =>
-          !isSelected(device.id)
+          !isSelected(
+            device.id
+          )
       )
       .sort(
         (a, b) =>
@@ -513,18 +657,22 @@ export default function DeviceManager({
   const otherDevices =
     availableDevices.filter(
       (device) =>
-        !looksRelevant(device)
+        !looksRelevant(
+          device
+        )
     );
 
   const deviceName = (
-    connected: ConnectedDevice
+    connected:
+      ConnectedDevice
   ) =>
     connected.device.name ||
     connected.device.localName ||
     "Okänd enhet";
 
   const equipmentType = (
-    connected: ConnectedDevice
+    connected:
+      ConnectedDevice
   ) => {
     if (
       connected.capabilities.includes(
@@ -551,26 +699,35 @@ export default function DeviceManager({
     device: Device;
   }) => (
     <Pressable
-      style={styles.deviceCard}
+      style={
+        styles.deviceCard
+      }
       onPress={() =>
         connect(device)
       }
       disabled={
-        connectingId !== null
+        connectingId !==
+        null
       }
     >
       <View
-        style={styles.deviceInfo}
+        style={
+          styles.deviceInfo
+        }
       >
         <Text
-          style={styles.deviceName}
+          style={
+            styles.deviceName
+          }
         >
           {device.name ||
             device.localName}
         </Text>
 
         <Text
-          style={styles.deviceHint}
+          style={
+            styles.deviceHint
+          }
         >
           {connectingId ===
           device.id
@@ -579,7 +736,9 @@ export default function DeviceManager({
         </Text>
       </View>
 
-      <Text style={styles.rssi}>
+      <Text
+        style={styles.rssi}
+      >
         {device.rssi ?? "?"} dBm
       </Text>
     </Pressable>
@@ -597,24 +756,31 @@ export default function DeviceManager({
         <Pressable
           onPress={onBack}
         >
-          <Text style={styles.back}>
+          <Text
+            style={styles.back}
+          >
             ‹ Tillbaka
           </Text>
         </Pressable>
 
-        <Text style={styles.brand}>
+        <Text
+          style={styles.brand}
+        >
           Friskis
         </Text>
 
-        <Text style={styles.title}>
+        <Text
+          style={styles.title}
+        >
           Anslut utrustning
         </Text>
 
         <Text
           style={styles.subtitle}
         >
-          Anslut det du vill använda
-          och välj sedan träningsform.
+          {proPassName
+            ? `Du ansluter till ${proPassName}. Anslut de enheter du vill använda.`
+            : "Anslut det du vill använda och välj sedan träningsform."}
         </Text>
 
         {(equipment ||
@@ -794,11 +960,14 @@ export default function DeviceManager({
           }
         >
           Träningsenheter (
-          {relevantDevices.length})
+          {
+            relevantDevices.length
+          }
+          )
         </Text>
 
-        {relevantDevices.length ===
-          0 &&
+        {relevantDevices
+          .length === 0 &&
           scanning && (
             <Text
               style={
@@ -848,115 +1017,121 @@ export default function DeviceManager({
               otherDevices.map(
                 (device) => (
                   <DeviceRow
-                    key={device.id}
-                    device={device}
+                    key={
+                      device.id
+                    }
+                    device={
+                      device
+                    }
                   />
                 )
               )}
           </>
         )}
 
-        <View
-          style={
-            styles.modeSection
-          }
-        >
-          <Text
+        {!initialMode && (
+          <View
             style={
-              styles.modeTitle
+              styles.modeSection
             }
           >
-            Välj träningsform
-          </Text>
+            <Text
+              style={
+                styles.modeTitle
+              }
+            >
+              Välj träningsform
+            </Text>
 
-          <Pressable
-            style={[
-              styles.modeCard,
-              selectedMode ===
-                "spinning" &&
-                styles.modeCardSelected,
-            ]}
-            onPress={() =>
-              setSelectedMode(
-                "spinning"
-              )
-            }
-          >
-            <View>
-              <Text
-                style={
-                  styles.modeName
-                }
-              >
-                🚴 Spinning
-              </Text>
+            <Pressable
+              style={[
+                styles.modeCard,
+                selectedMode ===
+                  "spinning" &&
+                  styles.modeCardSelected,
+              ]}
+              onPress={() =>
+                setSelectedMode(
+                  "spinning"
+                )
+              }
+            >
+              <View>
+                <Text
+                  style={
+                    styles.modeName
+                  }
+                >
+                  🚴 Spinning
+                </Text>
 
-              <Text
-                style={
-                  styles.modeDescription
-                }
-              >
-                Cykel, effekt, RPM och
-                puls
-              </Text>
-            </View>
+                <Text
+                  style={
+                    styles.modeDescription
+                  }
+                >
+                  Cykel, effekt, RPM
+                  och puls
+                </Text>
+              </View>
 
-            {selectedMode ===
-              "spinning" && (
-              <Text
-                style={
-                  styles.selectedCheck
-                }
-              >
-                ✓
-              </Text>
-            )}
-          </Pressable>
+              {selectedMode ===
+                "spinning" && (
+                <Text
+                  style={
+                    styles.selectedCheck
+                  }
+                >
+                  ✓
+                </Text>
+              )}
+            </Pressable>
 
-          <Pressable
-            style={[
-              styles.modeCard,
-              selectedMode ===
-                "indoor-walking" &&
-                styles.modeCardSelected,
-            ]}
-            onPress={() =>
-              setSelectedMode(
-                "indoor-walking"
-              )
-            }
-          >
-            <View>
-              <Text
-                style={
-                  styles.modeName
-                }
-              >
-                🏃 Indoor Walking
-              </Text>
+            <Pressable
+              style={[
+                styles.modeCard,
+                selectedMode ===
+                  "indoor-walking" &&
+                  styles.modeCardSelected,
+              ]}
+              onPress={() =>
+                setSelectedMode(
+                  "indoor-walking"
+                )
+              }
+            >
+              <View>
+                <Text
+                  style={
+                    styles.modeName
+                  }
+                >
+                  🏃 Indoor Walking
+                </Text>
 
-              <Text
-                style={
-                  styles.modeDescription
-                }
-              >
-                Hastighet, distans och
-                puls
-              </Text>
-            </View>
+                <Text
+                  style={
+                    styles.modeDescription
+                  }
+                >
+                  Hastighet,
+                  distans och puls
+                </Text>
+              </View>
 
-            {selectedMode ===
-              "indoor-walking" && (
-              <Text
-                style={
-                  styles.selectedCheck
-                }
-              >
-                ✓
-              </Text>
-            )}
-          </Pressable>
-        </View>
+              {selectedMode ===
+                "indoor-walking" && (
+                <Text
+                  style={
+                    styles.selectedCheck
+                  }
+                >
+                  ✓
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        )}
 
         <Pressable
           style={[
@@ -964,7 +1139,9 @@ export default function DeviceManager({
             !selectedMode &&
               styles.continueDisabled,
           ]}
-          disabled={!selectedMode}
+          disabled={
+            !selectedMode
+          }
           onPress={
             continueToTraining
           }
@@ -974,9 +1151,22 @@ export default function DeviceManager({
               styles.continueButtonText
             }
           >
-            Fortsätt
+            {proPassName
+              ? "Gå till passet"
+              : "Fortsätt"}
           </Text>
         </Pressable>
+
+        {proPassName && (
+          <Text
+            style={
+              styles.optionalText
+            }
+          >
+            Du kan fortsätta utan
+            anslutna enheter.
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -986,7 +1176,8 @@ const styles =
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#ffffff",
+      backgroundColor:
+        "#ffffff",
     },
 
     content: {
@@ -1016,6 +1207,7 @@ const styles =
       color: "#666666",
       marginTop: 6,
       marginBottom: 24,
+      lineHeight: 24,
     },
 
     selectedArea: {
@@ -1033,7 +1225,8 @@ const styles =
       justifyContent:
         "space-between",
       alignItems: "center",
-      backgroundColor: "#f3f3f3",
+      backgroundColor:
+        "#f3f3f3",
       borderWidth: 2,
       borderColor: "#E31836",
       borderRadius: 14,
@@ -1055,7 +1248,8 @@ const styles =
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#28A745",
+      backgroundColor:
+        "#28A745",
     },
 
     connectedText: {
@@ -1082,7 +1276,8 @@ const styles =
     },
 
     scanButton: {
-      backgroundColor: "#E31836",
+      backgroundColor:
+        "#E31836",
       paddingVertical: 16,
       alignItems: "center",
       borderRadius: 14,
@@ -1117,7 +1312,8 @@ const styles =
       alignItems: "center",
       paddingVertical: 16,
       borderBottomWidth: 1,
-      borderBottomColor: "#eeeeee",
+      borderBottomColor:
+        "#eeeeee",
     },
 
     deviceInfo: {
@@ -1175,7 +1371,8 @@ const styles =
     modeCardSelected: {
       borderWidth: 2,
       borderColor: "#E31836",
-      backgroundColor: "#fff5f6",
+      backgroundColor:
+        "#fff5f6",
     },
 
     modeName: {
@@ -1195,7 +1392,8 @@ const styles =
     },
 
     continueButton: {
-      backgroundColor: "#E31836",
+      backgroundColor:
+        "#E31836",
       borderRadius: 14,
       alignItems: "center",
       paddingVertical: 17,
@@ -1210,5 +1408,12 @@ const styles =
       color: "#ffffff",
       fontSize: 17,
       fontWeight: "700",
+    },
+
+    optionalText: {
+      color: "#777777",
+      textAlign: "center",
+      marginTop: 10,
+      fontSize: 13,
     },
   });
