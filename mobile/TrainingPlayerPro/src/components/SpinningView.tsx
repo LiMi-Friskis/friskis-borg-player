@@ -38,6 +38,7 @@ import ProHeader from "./pro/ProHeader";
 import WorkoutPager from "./pro/WorkoutPager";
 import WorkoutDataView from "./pro/WorkoutDataView";
 import WorkoutPassPlaceholder from "./pro/WorkoutPassPlaceholder";
+import WorkoutPassView from "./pro/WorkoutPassView";
 import {
   useUserProfile,
 } from "../context/UserProfileContext";
@@ -71,6 +72,7 @@ type DisplayBlock = {
   durationSeconds: number;
   color: string;
   targets: DisplayTarget[];
+  intensityValue: number | null;
 };
 
 function numberValue(
@@ -330,6 +332,19 @@ function toDisplayBlock(
         block.targets,
         intensityModel
       ),
+
+    intensityValue:
+      block.targets &&
+      typeof block.targets === "object"
+        ? numberValue(
+            (
+              block.targets as Record<
+                string,
+                unknown
+              >
+            ).intensityValue
+          )
+        : null,
   };
 }
 
@@ -1153,32 +1168,34 @@ export default function SpinningView({
       />
         }
         pass={
-          <WorkoutPassPlaceholder
-            passName={
-              proPassName
-            }
-            connected
-            onBack={onBack}
-            live={
-              status === "running" ||
-              status === "paused"
-            }
-            statusLabel={
-              status === "running" ||
-              status === "paused"
-                ? "LIVE"
-                : "VÄNTAR"
-            }
-            recording={
-              activityState === "recording"
-            }
-            onStartTraining={
-              startTraining
-            }
-            onStopTraining={
-              stopTraining
-            }
-          />
+          <WorkoutPassView
+        passName={proPassName}
+        blocks={proBlocks}
+        currentBlockIndex={currentBlockIndex}
+        blockRemaining={blockRemaining}
+        sessionElapsed={
+          liveSession.currentPositionSeconds
+        }
+        recording={
+          activityState === "recording"
+        }
+        onStartTraining={startTraining}
+        onStopTraining={stopTraining}
+        onBack={onBack}
+        live={
+          status === "running" ||
+          status === "paused"
+        }
+        statusLabel={
+          status === "finished"
+            ? "AVSLUTAT"
+            : status === "paused"
+            ? "PAUS"
+            : status === "running"
+            ? "LIVE"
+            : "VÄNTAR"
+        }
+      />
         }
       />
     );
