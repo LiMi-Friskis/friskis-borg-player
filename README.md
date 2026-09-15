@@ -1,17 +1,23 @@
-# Friskis Training Player — Prototype 2.5.0 · Pro Realtime v0.1
+# Friskis Training Player – update
 
-Ändringar i denna version:
-- screenshot-import går direkt till Redigera pass efter AI-analys
-- låttitel + artist läggs i blockets Beskrivning
-- passnamn hämtas från FitnessPlayer-listans namn när det är synligt
-- dublettnamn får automatiskt suffix `_2`, `_3`, osv.
-- MusicTrack/MusicTimeline ligger fortsatt separat från WorkoutBlock
+Detta paket innehåller bara filerna som behöver ersättas i GitHub-repots rot:
 
-## Deploy
-1. Ersätt webbfilerna i `main`.
-2. Deploya Edge Function `music-import` igen eftersom prompten för listnamn har förbättrats.
-3. Ingen ny SQL behövs.
+- `index.html`
+- `app.js`
+- `style.css`
 
-## Prototype 2.5.0 · Pro Realtime v0.1
+Ladda upp/ersätt dessa tre filer i `main`. Ingen SQL behöver köras och inga övriga filer ska ändras.
 
-Adds a Super User-only `KÖR MED PRO` flow backed by Supabase `live_sessions`. The web player is the master clock using `clock_anchor_at + position_ms`. See `SETUP_PRO_REALTIME_0.1.md` and `09_pro_realtime_v0_1.sql`.
+## Innehåll
+- Väntrummets kontrast/färger från 2.5.3.
+- `pass_snapshot.blocks[]` innehåller nu `intensityHeightPercent`, beräknat med exakt samma `intensityHeight(p, part)` som webbdiagrammet använder.
+- `targets` och övrigt snapshot-kontrakt är oförändrade.
+- Versionsvisningen är `Prototype 2.5.4 · Snapshot Height v0.1`.
+
+## Kontroll efter deploy
+1. Hårduppdatera sidan.
+2. Kontrollera att versionsraden visar `Prototype 2.5.4 · Snapshot Height v0.1`.
+3. Starta ett nytt `KÖR MED PRO`-pass.
+4. Kontrollera i `live_sessions.pass_snapshot` att varje block har `intensityHeightPercent` på blocknivå.
+
+Paketnamnet är avsiktligt generiskt och kan återanvändas för kommande webbuppdateringar.
