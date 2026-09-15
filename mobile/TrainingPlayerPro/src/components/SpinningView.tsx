@@ -35,6 +35,12 @@ import {
 } from "../hooks/useLiveSession";
 
 import ProHeader from "./pro/ProHeader";
+import WorkoutPager from "./pro/WorkoutPager";
+import WorkoutDataView from "./pro/WorkoutDataView";
+import WorkoutPassPlaceholder from "./pro/WorkoutPassPlaceholder";
+import {
+  useUserProfile,
+} from "../context/UserProfileContext";
 
 type Props = {
   setup: TrainingSetup;
@@ -48,16 +54,14 @@ const CYCLING_POWER_SERVICE =
 const CYCLING_POWER_MEASUREMENT =
   "2A63";
 
-/*
- * Tillfälligt FTP-värde.
- * Senare hämtas detta från
- * användarprofilen.
- */
-const MOCK_FTP = 200;
-
 type CrankState = {
   cumulativeRevolutions: number;
   lastEventTime: number;
+};
+
+type DisplayTarget = {
+  label: string;
+  value: string;
 };
 
 type DisplayBlock = {
@@ -65,19 +69,8 @@ type DisplayBlock = {
   title: string;
   instruction: string;
   durationSeconds: number;
-  targetFtpMin:
-    | number
-    | null;
-  targetFtpMax:
-    | number
-    | null;
-  targetRpmMin:
-    | number
-    | null;
-  targetRpmMax:
-    | number
-    | null;
   color: string;
+  targets: DisplayTarget[];
 };
 
 function numberValue(
@@ -110,6 +103,150 @@ function numberValue(
   return null;
 }
 
+function cleanTargetLabel(
+  modelName: unknown,
+  unit: unknown
+) {
+  if (
+    typeof modelName === "string" &&
+    modelName.trim()
+  ) {
+    return modelName
+      .trim()
+      .toUpperCase();
+  }
+
+  if (
+    typeof unit === "string" &&
+    unit.trim()
+  ) {
+    return unit
+      .replace(/%/g, "")
+      .trim()
+      .toUpperCase();
+  }
+
+  return "INTENSITET";
+}
+
+function buildDisplayTargets(
+  rawTargets: unknown,
+  intensityModel: unknown
+): DisplayTarget[] {
+  const targets =
+    rawTargets &&
+    typeof rawTargets === "object"
+      ? (rawTargets as Record<
+          string,
+          unknown
+        >)
+      : {};
+
+  const model =
+    intensityModel &&
+    typeof intensityModel === "object"
+      ? (intensityModel as Record<
+          string,
+          unknown
+        >)
+      : {};
+
+  const result: DisplayTarget[] = [];
+
+  const primaryLabel =
+    cleanTargetLabel(
+      model.name,
+      targets.unit ??
+        model.unit
+    );
+
+  let primaryValue = "";
+
+  if (
+    typeof targets.intensityLabel ===
+      "string" &&
+    targets.intensityLabel.trim()
+  ) {
+    primaryValue =
+      targets.intensityLabel.trim();
+  } else if (
+    typeof targets.intensityValue ===
+      "number"
+  ) {
+    const unit =
+      typeof targets.unit ===
+        "string"
+        ? targets.unit.trim()
+        : "";
+
+    primaryValue =
+      `${targets.intensityValue}${
+        unit.startsWith("%")
+          ? "%"
+          : unit
+          ? ` ${unit}`
+          : ""
+      }`;
+  }
+
+  if (primaryValue) {
+    result.push({
+      label:
+        `MÅL ${primaryLabel}`,
+      value: primaryValue,
+    });
+  }
+
+  /*
+   * Framtida stöd:
+   * om snapshot faktiskt innehåller
+   * RPM-mål visar vi det också.
+   */
+  const rpmMin =
+    numberValue(
+      targets.rpmMin ??
+        targets.targetRpmMin
+    );
+
+  const rpmMax =
+    numberValue(
+      targets.rpmMax ??
+        targets.targetRpmMax
+    );
+
+  if (
+    rpmMin !== null ||
+    rpmMax !== null
+  ) {
+    let rpmValue = "--";
+
+    if (
+      rpmMin !== null &&
+      rpmMax !== null
+    ) {
+      rpmValue =
+        `${rpmMin}–${rpmMax}`;
+    } else if (
+      rpmMin !== null
+    ) {
+      rpmValue =
+        String(rpmMin);
+    } else if (
+      rpmMax !== null
+    ) {
+      rpmValue =
+        String(rpmMax);
+    }
+
+    result.push({
+      label: "MÅL RPM",
+      value: rpmValue,
+    });
+  }
+
+  return result;
+}
+
 function firstNumber(
   object: Record<
     string,
@@ -137,7 +274,8 @@ function firstNumber(
 
 function toDisplayBlock(
   raw: unknown,
-  index: number
+  index: number,
+  intensityModel: unknown
 ): DisplayBlock {
   const block =
     raw &&
@@ -181,55 +319,17 @@ function toDisplayBlock(
         ]
       ) ?? 0,
 
-    targetFtpMin:
-      firstNumber(
-        block,
-        [
-          "targetFtpMin",
-          "ftpMin",
-          "targetFTPMin",
-          "ftp_min",
-        ]
-      ),
-
-    targetFtpMax:
-      firstNumber(
-        block,
-        [
-          "targetFtpMax",
-          "ftpMax",
-          "targetFTPMax",
-          "ftp_max",
-        ]
-      ),
-
-    targetRpmMin:
-      firstNumber(
-        block,
-        [
-          "targetRpmMin",
-          "rpmMin",
-          "targetRPMMin",
-          "rpm_min",
-        ]
-      ),
-
-    targetRpmMax:
-      firstNumber(
-        block,
-        [
-          "targetRpmMax",
-          "rpmMax",
-          "targetRPMMax",
-          "rpm_max",
-        ]
-      ),
-
     color:
       typeof block.color ===
         "string"
         ? block.color
         : "#5576A8",
+
+    targets:
+      buildDisplayTargets(
+        block.targets,
+        intensityModel
+      ),
   };
 }
 
@@ -264,6 +364,10 @@ export default function SpinningView({
   onBack,
   sessionId = null,
 }: Props) {
+  const {
+    profile,
+  } = useUserProfile();
+
   const {
     heartRate,
     heartRateStatus,
@@ -313,8 +417,10 @@ export default function SpinningView({
   const {
     activityState,
     elapsedSeconds,
+    summary,
     startTraining,
     stopTraining,
+    resetTraining,
   } = useTrainingSession({
     heartRate,
     speedKmh: null,
@@ -632,10 +738,30 @@ export default function SpinningView({
 
   const currentFtpPercent =
     powerWatts !== null &&
-    MOCK_FTP > 0
+    profile.ftpWatts !== null &&
+    profile.ftpWatts > 0
       ? Math.round(
           (powerWatts /
-            MOCK_FTP) *
+            profile.ftpWatts) *
+            100
+        )
+      : null;
+
+  const currentWattsPerKg =
+    powerWatts !== null &&
+    profile.weightKg !== null &&
+    profile.weightKg > 0
+      ? powerWatts /
+        profile.weightKg
+      : null;
+
+  const currentMaxHeartRatePercent =
+    heartRate !== null &&
+    profile.maxHeartRate !== null &&
+    profile.maxHeartRate > 0
+      ? Math.round(
+          (heartRate /
+            profile.maxHeartRate) *
             100
         )
       : null;
@@ -666,7 +792,10 @@ export default function SpinningView({
           ) =>
             toDisplayBlock(
               block,
-              index
+              index,
+              liveSession.session
+                ?.pass_snapshot
+                ?.intensityModel
             )
         )
         .sort(
@@ -793,6 +922,53 @@ export default function SpinningView({
       liveSession.session
         .status;
 
+    /*
+     * Deltagarens egen registrering är separat
+     * från instruktörens Pro-pass.
+     *
+     * När deltagaren stoppar sin registrering
+     * visar vi sammanfattningen även om
+     * instruktörens pass fortsätter.
+     */
+    if (
+      activityState ===
+      "finished"
+    ) {
+      return (
+        <TrainingSummaryScreen
+          onBack={onBack}
+          onContinue={
+            resetTraining
+          }
+          elapsedSeconds={
+            elapsedSeconds
+          }
+          averageHeartRate={
+            summary.averageHeartRate
+          }
+          maxHeartRate={
+            summary.maxHeartRate
+          }
+          averagePower={
+            summary.averagePower
+          }
+          maxPower={
+            summary.maxPower
+          }
+          averageCadence={
+            summary.averageCadence
+          }
+          averageSpeed={
+            summary.averageSpeed
+          }
+          distanceKm={
+            summary.distanceKm
+          }
+          proSession
+        />
+      );
+    }
+
     if (
       status === "ready"
     ) {
@@ -851,8 +1027,63 @@ export default function SpinningView({
       );
     }
 
+    const proPassName =
+      liveSession.session
+        .pass_snapshot
+        ?.name ??
+      "Spinning";
+
     return (
-      <ProSessionView
+      <WorkoutPager
+        data={
+          <WorkoutDataView
+            elapsedSeconds={
+              elapsedSeconds
+            }
+            powerWatts={
+              powerWatts
+            }
+            ftpPercent={
+              currentFtpPercent
+            }
+            wattsPerKg={
+              currentWattsPerKg
+            }
+            cadenceRpm={
+              cadenceRpm
+            }
+            heartRate={
+              heartRate
+            }
+            maxHeartRatePercent={
+              currentMaxHeartRatePercent
+            }
+            speedKmh={null}
+            distanceKm={null}
+            onBack={onBack}
+            live={
+              status === "running" ||
+              status === "paused"
+            }
+            statusLabel={
+              status === "running" ||
+              status === "paused"
+                ? "LIVE"
+                : "VÄNTAR"
+            }
+            recording={
+              activityState === "recording"
+            }
+            onStartTraining={
+              startTraining
+            }
+            onStopTraining={
+              stopTraining
+            }
+          />
+        }
+        pro={
+<ProSessionView
         onBack={onBack}
         passName={
           liveSession.session
@@ -920,13 +1151,129 @@ export default function SpinningView({
           stopTraining
         }
       />
+        }
+        pass={
+          <WorkoutPassPlaceholder
+            passName={
+              proPassName
+            }
+            connected
+            onBack={onBack}
+            live={
+              status === "running" ||
+              status === "paused"
+            }
+            statusLabel={
+              status === "running" ||
+              status === "paused"
+                ? "LIVE"
+                : "VÄNTAR"
+            }
+            recording={
+              activityState === "recording"
+            }
+            onStartTraining={
+              startTraining
+            }
+            onStopTraining={
+              stopTraining
+            }
+          />
+        }
+      />
     );
   }
 
   /*
    * STANDALONE
    */
+  if (
+    activityState ===
+    "finished"
+  ) {
+    return (
+      <TrainingSummaryScreen
+        onBack={onBack}
+        onContinue={
+          resetTraining
+        }
+        elapsedSeconds={
+          elapsedSeconds
+        }
+        averageHeartRate={
+          summary.averageHeartRate
+        }
+        maxHeartRate={
+          summary.maxHeartRate
+        }
+        averagePower={
+          summary.averagePower
+        }
+        maxPower={
+          summary.maxPower
+        }
+        averageCadence={
+          summary.averageCadence
+        }
+        averageSpeed={
+          summary.averageSpeed
+        }
+        distanceKm={
+          summary.distanceKm
+        }
+      />
+    );
+  }
+
   return (
+    <WorkoutPager
+      data={
+        <WorkoutDataView
+          elapsedSeconds={
+            elapsedSeconds
+          }
+          powerWatts={
+            powerWatts
+          }
+          ftpPercent={
+            currentFtpPercent
+          }
+          wattsPerKg={
+            currentWattsPerKg
+          }
+          cadenceRpm={
+            cadenceRpm
+          }
+          heartRate={
+            heartRate
+          }
+          maxHeartRatePercent={
+            currentMaxHeartRatePercent
+          }
+          speedKmh={null}
+          distanceKm={null}
+          onBack={onBack}
+          live={
+            anySensorConnected
+          }
+          statusLabel={
+            anySensorConnected
+              ? "LIVE"
+              : "VÄNTAR"
+          }
+          recording={
+            activityState === "recording"
+          }
+          onStartTraining={
+            startTraining
+          }
+          onStopTraining={
+            stopTraining
+          }
+        />
+      }
+
+      pro={
     <SafeAreaView
       style={styles.container}
     >
@@ -1119,8 +1466,10 @@ export default function SpinningView({
                 styles.ftpDescription
               }
             >
-              Testvärde:{" "}
-              {MOCK_FTP} W
+              Personlig FTP:{" "}
+              {profile.ftpWatts !== null
+                ? `${profile.ftpWatts} W`
+                : "Ej angiven"}
             </Text>
           </View>
         </View>
@@ -1169,6 +1518,292 @@ export default function SpinningView({
         </View>
       </View>
     </SafeAreaView>
+      }
+
+      pass={
+        <WorkoutPassPlaceholder
+          connected={false}
+          onBack={onBack}
+          live={
+            anySensorConnected
+          }
+          statusLabel={
+            anySensorConnected
+              ? "LIVE"
+              : "VÄNTAR"
+          }
+          recording={
+            activityState === "recording"
+          }
+          onStartTraining={
+            startTraining
+          }
+          onStopTraining={
+            stopTraining
+          }
+        />
+      }
+    />
+  );
+}
+
+function TrainingSummaryScreen({
+  onBack,
+  onContinue,
+  elapsedSeconds,
+  averageHeartRate,
+  maxHeartRate,
+  averagePower,
+  maxPower,
+  averageCadence,
+  averageSpeed,
+  distanceKm,
+  proSession = false,
+}: {
+  onBack: () => void;
+  onContinue: () => void;
+  elapsedSeconds: number;
+  averageHeartRate: number | null;
+  maxHeartRate: number | null;
+  averagePower: number | null;
+  maxPower: number | null;
+  averageCadence: number | null;
+  averageSpeed: number | null;
+  distanceKm: number | null;
+  proSession?: boolean;
+}) {
+  const rounded = (
+    value: number | null
+  ) =>
+    value !== null
+      ? String(Math.round(value))
+      : "--";
+
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      <View
+        style={
+          styles.summaryContent
+        }
+      >
+        <TopBar
+          onBack={onBack}
+          live={false}
+          label="KLAR"
+        />
+
+        <ProHeader
+          title="Sammanfattning"
+          subtitle="Din träning"
+        />
+
+        <View
+          style={
+            styles.summaryTimeCard
+          }
+        >
+          <Text
+            style={
+              styles.smallLabel
+            }
+          >
+            TRÄNINGSTID
+          </Text>
+
+          <Text
+            style={
+              styles.summaryTime
+            }
+          >
+            {formatTrainingTime(
+              elapsedSeconds
+            )}
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.summaryGrid
+          }
+        >
+          <SummaryCard
+            label="SNITTPULS"
+            value={
+              rounded(
+                averageHeartRate
+              )
+            }
+            unit="BPM"
+          />
+
+          <SummaryCard
+            label="MAXPULS"
+            value={
+              rounded(
+                maxHeartRate
+              )
+            }
+            unit="BPM"
+          />
+
+          <SummaryCard
+            label="SNITTEFFEKT"
+            value={
+              rounded(
+                averagePower
+              )
+            }
+            unit="W"
+          />
+
+          <SummaryCard
+            label="MAXEFFEKT"
+            value={
+              rounded(
+                maxPower
+              )
+            }
+            unit="W"
+          />
+
+          <SummaryCard
+            label="SNITTKADENS"
+            value={
+              rounded(
+                averageCadence
+              )
+            }
+            unit="RPM"
+          />
+
+          {averageSpeed !==
+          null ? (
+            <SummaryCard
+              label="SNITTHASTIGHET"
+              value={
+                averageSpeed.toFixed(
+                  1
+                )
+              }
+              unit="KM/H"
+            />
+          ) : null}
+
+          {distanceKm !==
+          null ? (
+            <SummaryCard
+              label="DISTANS"
+              value={
+                distanceKm.toFixed(
+                  2
+                )
+              }
+              unit="KM"
+            />
+          ) : null}
+        </View>
+
+        <View
+          style={
+            styles.summaryBottom
+          }
+        >
+          {proSession ? (
+            <>
+              <Pressable
+                style={
+                  styles.proStartButton
+                }
+                onPress={
+                  onContinue
+                }
+              >
+                <Text
+                  style={
+                    styles.primaryButtonText
+                  }
+                >
+                  Tillbaka till passet
+                </Text>
+              </Pressable>
+
+              <Text
+                style={
+                  styles.summaryHint
+                }
+              >
+                Instruktörens pass
+                fortsätter oberoende
+                av din registrering.
+              </Text>
+            </>
+          ) : (
+            <Pressable
+              style={
+                styles.proStartButton
+              }
+              onPress={
+                onContinue
+              }
+            >
+              <Text
+                style={
+                  styles.primaryButtonText
+                }
+              >
+                Ny träning
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+}) {
+  return (
+    <View
+      style={
+        styles.summaryCard
+      }
+    >
+      <Text
+        style={
+          styles.summaryLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.summaryValue
+        }
+        adjustsFontSizeToFit
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+
+      <Text
+        style={
+          styles.summaryUnit
+        }
+      >
+        {unit}
+      </Text>
+    </View>
   );
 }
 
@@ -1799,35 +2434,32 @@ function ProSessionView({
             </Text>
           )}
 
-          <View
-            style={
-              styles.targetsRow
-            }
-          >
-            <Target
-              label="MÅL %FTP"
-              value={rangeText(
-                currentBlock
-                  ?.targetFtpMin ??
-                  null,
-                currentBlock
-                  ?.targetFtpMax ??
-                  null
+          {currentBlock &&
+          currentBlock.targets.length >
+            0 ? (
+            <View
+              style={
+                styles.targetsRow
+              }
+            >
+              {currentBlock.targets.map(
+                (
+                  target,
+                  index
+                ) => (
+                  <Target
+                    key={`${target.label}-${index}`}
+                    label={
+                      target.label
+                    }
+                    value={
+                      target.value
+                    }
+                  />
+                )
               )}
-            />
-
-            <Target
-              label="MÅL RPM"
-              value={rangeText(
-                currentBlock
-                  ?.targetRpmMin ??
-                  null,
-                currentBlock
-                  ?.targetRpmMax ??
-                  null
-              )}
-            />
-          </View>
+            </View>
+          ) : null}
         </View>
 
         <View
@@ -2590,7 +3222,11 @@ const styles =
     },
 
     bottomArea: {
-      marginTop: "auto",
+      position: "absolute",
+      left: 20,
+      right: 20,
+      bottom: 26,
+      zIndex: 20,
     },
 
     primaryButton: {
@@ -2598,7 +3234,8 @@ const styles =
         "#E31836",
       borderRadius: 18,
       alignItems: "center",
-      paddingVertical: 17,
+      justifyContent: "center",
+      minHeight: 54,
     },
 
     primaryButtonText: {
@@ -2609,15 +3246,16 @@ const styles =
 
     stopButton: {
       backgroundColor:
-        "#ffffff",
+        "#2a2a2e",
       borderRadius: 18,
       alignItems: "center",
-      paddingVertical: 17,
+      justifyContent: "center",
+      minHeight: 54,
     },
 
     stopButtonText: {
-      color: "#111111",
-      fontSize: 17,
+      color: "#ffffff",
+      fontSize: 16,
       fontWeight: "800",
     },
 
@@ -2696,6 +3334,88 @@ const styles =
       color: "#aaaab0",
       fontSize: 11,
       marginTop: 3,
+    },
+
+    summaryContent: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 18,
+    },
+
+    summaryTimeCard: {
+      backgroundColor:
+        "#18181b",
+      borderRadius: 22,
+      paddingVertical: 22,
+      paddingHorizontal: 18,
+      marginTop: 20,
+      alignItems: "center",
+    },
+
+    summaryTime: {
+      color: "#ffffff",
+      fontSize: 48,
+      lineHeight: 54,
+      fontWeight: "800",
+      marginTop: 4,
+      fontVariant: [
+        "tabular-nums",
+      ],
+    },
+
+    summaryGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginTop: 12,
+    },
+
+    summaryCard: {
+      width: "48.5%",
+      backgroundColor:
+        "#18181b",
+      borderRadius: 18,
+      paddingVertical: 16,
+      paddingHorizontal: 14,
+      minHeight: 112,
+      justifyContent:
+        "center",
+    },
+
+    summaryLabel: {
+      color: "#7d7d83",
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 1.1,
+    },
+
+    summaryValue: {
+      color: "#ffffff",
+      fontSize: 32,
+      lineHeight: 37,
+      fontWeight: "800",
+      marginTop: 3,
+    },
+
+    summaryUnit: {
+      color: "#89898f",
+      fontSize: 10,
+      fontWeight: "700",
+      marginTop: 1,
+    },
+
+    summaryBottom: {
+      marginTop: "auto",
+      paddingTop: 14,
+    },
+
+    summaryHint: {
+      color: "#737379",
+      fontSize: 12,
+      lineHeight: 17,
+      textAlign: "center",
+      marginTop: 10,
     },
 
     statusCenter: {
