@@ -434,3 +434,18 @@ main{padding-top:24px;padding-bottom:76px}
 
 .pro-session-state{display:inline-flex;align-items:center;justify-content:center;margin:22px 0 26px;padding:10px 16px;border-radius:999px;background:#f3f3f3;font-size:13px;font-weight:900;letter-spacing:.06em}
 .pro-countdown-label{margin-top:18px;font-size:13px;font-weight:900;letter-spacing:.08em}
+/* Prototype 2.5.2 — deltagarvänligt Pro-väntrum */
+.participant-waiting{width:min(760px,100%);padding:44px 48px 36px}
+.pro-activity{margin-top:18px;font-size:15px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#777}
+.pro-pass-name{margin:8px 0 4px;font-size:clamp(34px,5vw,58px);line-height:1.02;letter-spacing:-.035em}
+.pro-host{font-size:20px;color:#666;margin:8px 0 28px}
+.pro-waiting-state{display:flex;align-items:center;justify-content:center;gap:12px;margin:28px auto 24px;font-size:clamp(20px,3vw,28px);font-weight:950;letter-spacing:.04em}
+.pro-waiting-dot{width:13px;height:13px;border-radius:50%;background:#e31836;box-shadow:0 0 0 0 rgba(227,24,54,.35);animation:proWaitingPulse 1.8s infinite}
+@keyframes proWaitingPulse{0%{box-shadow:0 0 0 0 rgba(227,24,54,.35)}70%{box-shadow:0 0 0 12px rgba(227,24,54,0)}100%{box-shadow:0 0 0 0 rgba(227,24,54,0)}}
+.pro-connect-text{font-size:20px;line-height:1.45;margin:0 auto 8px;max-width:620px}
+.pro-connect-help{font-size:15px;line-height:1.5;color:#777;margin:0 auto;max-width:590px}
+.pro-pass-meta{margin:24px 0 30px;font-size:14px;font-weight:800;color:#777}
+.pro-host-controls{border-top:1px solid #eee;padding-top:26px;display:flex;justify-content:center;align-items:center;gap:12px}
+.pro-start-button{font-size:16px;padding:14px 24px}
+.pro-cancel-button{border-color:transparent;background:transparent;color:#777}
+@media (max-width:700px){.participant-waiting{padding:30px 20px 24px}.pro-host-controls{flex-direction:column}.pro-start-button,.pro-cancel-button{width:100%}}

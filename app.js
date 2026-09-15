@@ -40,8 +40,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.5.1 · PRO REALTIME v0.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.5.1 · PRO REALTIME v0.1')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.5.2 · PRO VÄNTRUM v0.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.5.2 · PRO VÄNTRUM v0.1')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -358,7 +358,7 @@ async function createPassFromMusic(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.5.1 · Pro Realtime v0.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.5.2 · Pro Väntrum v0.1</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -981,7 +981,8 @@ function buildPassSnapshot(p){
   const a=registries.activities.find(x=>x.id===p.activity_type_id),m=intensityModel(p);
   return {
     schemaVersion:1,passId:p.id,name:p.name,
-    host:{userId:auth?.user?.id||null,displayName:currentProfile?.display_name||auth?.user?.email||'Instruktör'},
+    ...(currentProfile?.display_name?{hostName:currentProfile.display_name}:{}),
+    host:{userId:auth?.user?.id||null,displayName:currentProfile?.display_name||null},
     activity:{id:p.activity_type_id||null,code:a?.code||null,name:a?.name||activityName(p)},
     intensityModel:{id:p.intensity_model_id||null,code:m?.code||null,name:m?.name||modelName(p),unit:m?.unit_label||''},
     totalDurationSec:total(p),blocks:p.parts.map((x,i)=>snapshotBlock(x,i,p))
@@ -1023,8 +1024,10 @@ async function runWithPro(i){
   try{
     liveSession=await createLiveSession(p);
     stop();active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;running=false;
-    setBrand(p.name,'PRO SESSION · VÄNTAR');setHomeButton(false);
-    app.innerHTML=`<div class="pro-ready"><div class="pro-ready-card"><div class="pro-kicker">TRAINING PLAYER PRO</div><h1>Väntar på start</h1><p class="muted">Deltagarna kan nu öppna Training Player Pro och välja <b>${escAttr(p.name)}</b> i listan över aktiva pass.</p><div class="pro-session-state">SESSION AKTIV · REDO</div><div class="actions" style="justify-content:center"><button class="primary" onclick="startProPass()">▶ STARTA PASS</button><button onclick="cancelLiveSession()">AVBRYT</button></div></div></div>`;
+    setBrand(p.name,'TRAINING PLAYER PRO');setHomeButton(false);
+    const activity=activityName(p),model=modelName(p),minutes=Math.round(total(p)/60);
+    const hostName=currentProfile?.display_name||'';
+    app.innerHTML=`<div class="pro-ready"><div class="pro-ready-card participant-waiting"><div class="pro-kicker">TRAINING PLAYER PRO</div><div class="pro-activity">${escAttr(activity)}</div><h1 class="pro-pass-name">${escAttr(p.name)}</h1>${hostName?`<div class="pro-host">med ${escAttr(hostName)}</div>`:''}<div class="pro-waiting-state"><span class="pro-waiting-dot"></span><span>PASS STARTAR SNART</span></div><p class="pro-connect-text">Anslut till passet i <b>Training Player Pro</b> i din telefon</p><p class="pro-connect-help">När instruktören startar passet börjar nedräkningen automatiskt.</p><div class="pro-pass-meta">${escAttr(model)}${minutes?` · ${minutes} min`:''}</div><div class="pro-host-controls"><button class="primary pro-start-button" onclick="startProPass()">▶ STARTA PASS</button><button class="pro-cancel-button" onclick="cancelLiveSession()">AVBRYT</button></div></div></div>`;
   }catch(e){console.error(e);alert('Kunde inte skapa Pro-session: '+e.message)}
 }
 function startProPass(){
@@ -1235,8 +1238,23 @@ function toggle(){
   running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive();
 }
 function stop(){if(running)applyClockPosition(currentPositionMs(),false);running=false;if(timer){clearInterval(timer);timer=null}}
-function next(){let s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+sec(x.time),0);applyClockPosition(Math.min(total(active.p),c)*1000,running);if(liveSession)void syncLiveSession(running?'running':(liveSession.status==='ready'?'ready':'paused'));saveSession();drawLive()}
-function prev(){let s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0),target=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0);applyClockPosition(target*1000,running);if(liveSession)void syncLiveSession(running?'running':(liveSession.status==='ready'?'ready':'paused'));saveSession();drawLive()}
+function syncLivePosition(positionMs,status){
+  if(!liveSession?.id)return;
+  const pos=Math.round(positionMs),anchorIso=new Date().toISOString();
+  const patch={status,current_block_index:blockIndexAtMs(pos),position_ms:pos,updated_at:anchorIso,clock_anchor_at:status==='running'?anchorIso:null,countdown_ends_at:null};
+  liveSession={...liveSession,...patch};
+  void patchLiveSession(patch).catch(e=>console.error('Kunde inte synka blockbyte till Pro-session',e));
+}
+function next(){
+  const s=state(),c=active.p.parts.slice(0,s.i+1).reduce((a,x)=>a+sec(x.time),0),target=Math.min(total(active.p),c)*1000;
+  applyClockPosition(target,running);saveSession();drawLive();
+  if(liveSession)syncLivePosition(target,running?'running':(liveSession.status==='ready'?'ready':'paused'));
+}
+function prev(){
+  const s=state(),start=active.p.parts.slice(0,s.i).reduce((a,x)=>a+sec(x.time),0),targetSec=(s.into>3)?start:active.p.parts.slice(0,Math.max(0,s.i-1)).reduce((a,x)=>a+sec(x.time),0),target=targetSec*1000;
+  applyClockPosition(target,running);saveSession();drawLive();
+  if(liveSession)syncLivePosition(target,running?'running':(liveSession.status==='ready'?'ready':'paused'));
+}
 
 homeBtn.onclick=goHome;
 (async()=>{const cb=parseAuthCallback();if(cb){showSetPassword(cb);return}if(auth){try{if(sessionNeedsRefresh())await refreshAuthSession()}catch(e){alert(e.message);login();return}await markOwnProfileActive();await loadProfiles();if(currentProfile&&!currentProfile.is_active){auth=null;currentProfile=null;profiles=[];localStorage.removeItem(AUTH_KEY);alert('Ditt konto är inaktiverat. Kontakta en administratör.');login();return}}await loadRegistries();await loadPasses();checkResume()})();
