@@ -449,3 +449,15 @@ main{padding-top:24px;padding-bottom:76px}
 .pro-start-button{font-size:16px;padding:14px 24px}
 .pro-cancel-button{border-color:transparent;background:transparent;color:#777}
 @media (max-width:700px){.participant-waiting{padding:30px 20px 24px}.pro-host-controls{flex-direction:column}.pro-start-button,.pro-cancel-button{width:100%}}
+
+/* Prototype 2.5.3 — Pro-väntrum: hög kontrast på vit bakgrund */
+.participant-waiting{color:#202124}
+.participant-waiting .pro-kicker{color:#5f6368}
+.participant-waiting .pro-activity{color:#3c4043}
+.participant-waiting .pro-pass-name{color:#202124}
+.participant-waiting .pro-host{color:#4f5256}
+.participant-waiting .pro-waiting-state{color:#e31836}
+.participant-waiting .pro-connect-text{color:#292b2f}
+.participant-waiting .pro-connect-help{color:#666a70}
+.participant-waiting .pro-pass-meta{color:#4f5256}
+.participant-waiting .pro-cancel-button{color:#666a70}
