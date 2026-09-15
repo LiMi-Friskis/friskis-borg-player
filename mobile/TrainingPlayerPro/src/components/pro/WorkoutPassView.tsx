@@ -21,6 +21,7 @@ export type PassDisplayBlock = {
   color: string;
   targets: DisplayTarget[];
   intensityValue: number | null;
+  intensityHeightPercent: number | null;
 };
 
 type Props = {
@@ -316,9 +317,17 @@ export default function WorkoutPassView({
                         : "0%";
 
                     const height =
-                      intensityHeight(
-                        block.intensityValue
-                      );
+                      block.intensityHeightPercent !== null
+                        ? Math.max(
+                            0,
+                            Math.min(
+                              100,
+                              block.intensityHeightPercent
+                            )
+                          )
+                        : intensityHeight(
+                            block.intensityValue
+                          );
 
                     return (
                       <View
@@ -336,7 +345,10 @@ export default function WorkoutPassView({
                             styles.timelineBlock,
                             {
                               height:
-                                `${height}%` as any,
+                                Math.max(
+                                  3,
+                                  (82 * height) / 100
+                                ),
                               backgroundColor:
                                 block.color,
                             },

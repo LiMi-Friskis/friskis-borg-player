@@ -73,6 +73,7 @@ type DisplayBlock = {
   color: string;
   targets: DisplayTarget[];
   intensityValue: number | null;
+  intensityHeightPercent: number | null;
 };
 
 function numberValue(
@@ -345,6 +346,11 @@ function toDisplayBlock(
             ).intensityValue
           )
         : null,
+
+    intensityHeightPercent:
+      numberValue(
+        block.intensityHeightPercent
+      ),
   };
 }
 
