@@ -34,6 +34,10 @@ import {
   useLiveSession,
 } from "../hooks/useLiveSession";
 
+import {
+  useActiveSessions,
+} from "../hooks/useActiveSessions";
+
 import ProHeader from "./pro/ProHeader";
 import WorkoutPager from "./pro/WorkoutPager";
 import WorkoutDataView from "./pro/WorkoutDataView";
@@ -450,9 +454,33 @@ export default function SpinningView({
     cadenceRpm,
   });
 
+  /*
+   * Sessionen kan komma från två håll:
+   *
+   * 1. Användaren valde ett Pro-pass innan träningsvyn öppnades.
+   * 2. Användaren började träna fristående och ansluter senare
+   *    från Pass-vyn.
+   *
+   * Viktigt: SpinningView förblir monterad när sessionen ansluts.
+   * Därmed fortsätter BLE och useTrainingSession utan omstart.
+   */
+  const [
+    attachedSessionId,
+    setAttachedSessionId,
+  ] = useState<string | null>(
+    sessionId ?? null
+  );
+
+  const {
+    sessions: activeSessions,
+    loading: activeSessionsLoading,
+    error: activeSessionsError,
+    refresh: refreshActiveSessions,
+  } = useActiveSessions();
+
   const liveSession =
     useLiveSession(
-      sessionId
+      attachedSessionId
     );
 
   /*
@@ -911,7 +939,7 @@ export default function SpinningView({
         )
       : 0;
 
-  if (sessionId) {
+  if (attachedSessionId) {
     if (
       liveSession.loading
     ) {
@@ -1563,6 +1591,23 @@ export default function SpinningView({
           }
           onStopTraining={
             stopTraining
+          }
+          sessions={activeSessions}
+          sessionsLoading={
+            activeSessionsLoading
+          }
+          sessionsError={
+            activeSessionsError
+          }
+          onRefreshSessions={
+            refreshActiveSessions
+          }
+          onSelectSession={
+            (selectedSessionId) => {
+              setAttachedSessionId(
+                selectedSessionId
+              );
+            }
           }
         />
       }
