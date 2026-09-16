@@ -40,7 +40,8 @@
           "imageWidth": 76
         }
       ],
-      "@sfourdrinier/react-native-ble-plx"
+      "@sfourdrinier/react-native-ble-plx",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

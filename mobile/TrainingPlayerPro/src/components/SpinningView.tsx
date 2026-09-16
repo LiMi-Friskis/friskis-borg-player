@@ -2918,7 +2918,7 @@ const styles =
 
     liveBadgeActive: {
       backgroundColor:
-        "#16261b",
+        "#10281a",
     },
 
     liveDot: {
@@ -2931,7 +2931,7 @@ const styles =
 
     liveDotActive: {
       backgroundColor:
-        "#48c968",
+        "#30d158",
     },
 
     liveText: {
@@ -2973,7 +2973,7 @@ const styles =
 
     sensorDotActive: {
       backgroundColor:
-        "#48c968",
+        "#30d158",
     },
 
     sensorLabel: {

@@ -17,7 +17,7 @@ export default function ProHeader({
   return (
     <View style={styles.container}>
       <Image
-        source={require("../../../assets/friskis-logo.png")}
+        source={require("../../../assets/training-player-logo.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -53,8 +53,8 @@ const styles = StyleSheet.create({
   },
 
   logo: {
-    width: 46,
-    height: 46,
+    width: 58,
+    height: 58,
   },
 
   textArea: {
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   title: {
     color: "#ffffff",
     fontSize: 22,
-    fontWeight: "700",
+    fontFamily: "DMSans_700Bold",
   },
 
   badge: {
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
 
   badgeText: {
     color: "#ffffff",
-    fontWeight: "800",
+    fontFamily: "DMSans_700Bold",
     fontSize: 10,
     letterSpacing: 0.8,
   },
@@ -91,5 +91,6 @@ const styles = StyleSheet.create({
     color: "#8f8f94",
     marginTop: 3,
     fontSize: 13,
+    fontFamily: "DMSans_400Regular",
   },
 });
