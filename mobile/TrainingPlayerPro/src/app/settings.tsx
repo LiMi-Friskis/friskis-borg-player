@@ -1,13 +1,16 @@
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
+
 import {
   useEffect,
   useState,
@@ -16,6 +19,7 @@ import {
 import {
   useUserProfile,
 } from "@/context/UserProfileContext";
+
 import ProHeader from "@/components/pro/ProHeader";
 
 function numberToText(
@@ -64,6 +68,21 @@ export default function SettingsScreen() {
     setMaxHeartRate,
   ] = useState("");
 
+  const [
+    showOtherBluetoothDevices,
+    setShowOtherBluetoothDevices,
+  ] = useState(false);
+
+  const [
+    showIndoorWalking,
+    setShowIndoorWalking,
+  ] = useState(false);
+
+  const [
+    saved,
+    setSaved,
+  ] = useState(false);
+
   useEffect(() => {
     if (!loaded) {
       return;
@@ -86,31 +105,47 @@ export default function SettingsScreen() {
         profile.maxHeartRate
       )
     );
+
+    setShowOtherBluetoothDevices(
+      profile.showOtherBluetoothDevices
+    );
+
+    setShowIndoorWalking(
+      profile.showIndoorWalking
+    );
   }, [loaded]);
 
-  const saveWeight = () => {
+  const handleChange = (
+    setter: (
+      value: string
+    ) => void
+  ) => (
+    value: string
+  ) => {
+    setter(value);
+    setSaved(false);
+  };
+
+  const saveSettings = () => {
     updateProfile({
       weightKg:
         parseNumber(weight),
-    });
-  };
 
-  const saveFtp = () => {
-    updateProfile({
       ftpWatts:
         parseNumber(ftp),
-    });
-  };
 
-  const saveMaxHeartRate =
-    () => {
-      updateProfile({
-        maxHeartRate:
-          parseNumber(
-            maxHeartRate
-          ),
-      });
-    };
+      maxHeartRate:
+        parseNumber(
+          maxHeartRate
+        ),
+
+      showOtherBluetoothDevices,
+
+      showIndoorWalking,
+    });
+
+    setSaved(true);
+  };
 
   return (
     <SafeAreaView
@@ -132,16 +167,13 @@ export default function SettingsScreen() {
         >
           <ProHeader
             title="Inställningar"
-            subtitle="Personliga träningsvärden"
           />
 
           <Text
             style={styles.intro}
           >
             Dina värden sparas lokalt
-            på telefonen och används
-            för att beräkna personlig
-            träningsdata.
+            på telefonen.
           </Text>
 
           <View
@@ -151,11 +183,11 @@ export default function SettingsScreen() {
               label="VIKT"
               value={weight}
               onChangeText={
-                setWeight
+                handleChange(
+                  setWeight
+                )
               }
-              onSave={saveWeight}
               unit="kg"
-              description="Används för att beräkna W/kg."
               placeholder="82"
               decimal
             />
@@ -164,11 +196,11 @@ export default function SettingsScreen() {
               label="FTP"
               value={ftp}
               onChangeText={
-                setFtp
+                handleChange(
+                  setFtp
+                )
               }
-              onSave={saveFtp}
               unit="W"
-              description="Används för att beräkna aktuell % av FTP."
               placeholder="200"
             />
 
@@ -178,14 +210,75 @@ export default function SettingsScreen() {
                 maxHeartRate
               }
               onChangeText={
-                setMaxHeartRate
-              }
-              onSave={
-                saveMaxHeartRate
+                handleChange(
+                  setMaxHeartRate
+                )
               }
               unit="bpm"
-              description="Används för att beräkna % av maxpuls."
               placeholder="175"
+            />
+          </View>
+
+          <Pressable
+            style={
+              styles.saveButton
+            }
+            onPress={
+              saveSettings
+            }
+          >
+            <Text
+              style={
+                styles.saveButtonText
+              }
+            >
+              Spara inställningar
+            </Text>
+          </Pressable>
+
+          {saved ? (
+            <Text
+              style={
+                styles.savedText
+              }
+            >
+              ✓ Inställningarna är sparade
+            </Text>
+          ) : null}
+
+          <View
+            style={styles.betaSection}
+          >
+            <Text
+              style={styles.betaTitle}
+            >
+              BETA
+            </Text>
+
+            <SettingSwitch
+              title="Visa övriga BT-enheter"
+              value={
+                showOtherBluetoothDevices
+              }
+              onValueChange={(value) => {
+                setShowOtherBluetoothDevices(
+                  value
+                );
+                setSaved(false);
+              }}
+            />
+
+            <SettingSwitch
+              title="Visa Indoor Walking"
+              value={
+                showIndoorWalking
+              }
+              onValueChange={(value) => {
+                setShowIndoorWalking(
+                  value
+                );
+                setSaved(false);
+              }}
             />
           </View>
 
@@ -205,11 +298,15 @@ export default function SettingsScreen() {
                 styles.infoText
               }
             >
-              Uppgifterna lämnar inte
-              telefonen i den här
-              prototypversionen.
+              Dina personliga data sparas
+              lokalt på telefonen och delas
+              aldrig.
             </Text>
           </View>
+
+          <Text style={styles.developerText}>
+            Utvecklad av LiMi Equus AB
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -220,9 +317,7 @@ function ProfileField({
   label,
   value,
   onChangeText,
-  onSave,
   unit,
-  description,
   placeholder,
   decimal = false,
 }: {
@@ -231,9 +326,7 @@ function ProfileField({
   onChangeText: (
     value: string
   ) => void;
-  onSave: () => void;
   unit: string;
-  description: string;
   placeholder: string;
   decimal?: boolean;
 }) {
@@ -256,10 +349,6 @@ function ProfileField({
           onChangeText={
             onChangeText
           }
-          onBlur={onSave}
-          onSubmitEditing={
-            onSave
-          }
           placeholder={
             placeholder
           }
@@ -269,7 +358,6 @@ function ProfileField({
               ? "decimal-pad"
               : "number-pad"
           }
-          returnKeyType="done"
         />
 
         <Text
@@ -278,14 +366,37 @@ function ProfileField({
           {unit}
         </Text>
       </View>
+    </View>
+  );
+}
 
+function SettingSwitch({
+  title,
+  value,
+  onValueChange,
+}: {
+  title: string;
+  value: boolean;
+  onValueChange: (
+    value: boolean
+  ) => void;
+}) {
+  return (
+    <View
+      style={styles.switchRow}
+    >
       <Text
-        style={
-          styles.description
-        }
+        style={styles.switchTitle}
       >
-        {description}
+        {title}
       </Text>
+
+      <Switch
+        value={value}
+        onValueChange={
+          onValueChange
+        }
+      />
     </View>
   );
 }
@@ -304,35 +415,36 @@ const styles =
 
     content: {
       paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 120,
+      paddingTop: 12,
+      paddingBottom: 100,
     },
 
     intro: {
       color: "#8e8e94",
-      fontSize: 14,
-      lineHeight: 20,
-      marginTop: 18,
-      marginBottom: 18,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 10,
+      marginBottom: 12,
     },
 
     section: {
-      gap: 12,
+      gap: 8,
     },
 
     fieldCard: {
       backgroundColor:
         "#18181b",
-      borderRadius: 20,
-      padding: 18,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
     },
 
     label: {
       color: "#8e8e94",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "800",
       letterSpacing: 1.2,
-      marginBottom: 8,
+      marginBottom: 2,
     },
 
     inputRow: {
@@ -343,32 +455,80 @@ const styles =
     input: {
       flex: 1,
       color: "#ffffff",
-      fontSize: 36,
+      fontSize: 30,
       fontWeight: "800",
-      paddingVertical: 2,
+      paddingVertical: 0,
       paddingHorizontal: 0,
     },
 
     unit: {
       color: "#8e8e94",
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "700",
       marginLeft: 10,
     },
 
-    description: {
-      color: "#6f6f75",
-      fontSize: 12,
-      lineHeight: 17,
-      marginTop: 6,
+    saveButton: {
+      minHeight: 50,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor:
+        "#E31836",
+      marginTop: 12,
+    },
+
+    saveButtonText: {
+      color: "#ffffff",
+      fontSize: 16,
+      fontWeight: "800",
+    },
+
+    savedText: {
+      color: "#30D158",
+      fontSize: 13,
+      fontWeight: "700",
+      textAlign: "center",
+      marginTop: 8,
+    },
+
+    betaSection: {
+      marginTop: 18,
+    },
+
+    betaTitle: {
+      color: "#8e8e94",
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+      marginBottom: 6,
+    },
+
+    switchRow: {
+      minHeight: 52,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+      borderBottomWidth: 1,
+      borderBottomColor:
+        "#242429",
+    },
+
+    switchTitle: {
+      color: "#ffffff",
+      fontSize: 14,
+      fontWeight: "600",
+      flex: 1,
+      paddingRight: 12,
     },
 
     infoCard: {
       borderWidth: 1,
       borderColor: "#242429",
-      borderRadius: 18,
-      padding: 16,
-      marginTop: 18,
+      borderRadius: 16,
+      padding: 14,
+      marginTop: 16,
     },
 
     infoTitle: {
@@ -381,7 +541,14 @@ const styles =
     infoText: {
       color: "#737379",
       fontSize: 12,
-      lineHeight: 18,
-      marginTop: 6,
+      lineHeight: 17,
+      marginTop: 4,
     },
-  });
+    developerText: {
+      color: "#737379",
+      fontSize: 12,
+      textAlign: "center",
+      marginTop: 18,
+      marginBottom: 16,
+    },
+});

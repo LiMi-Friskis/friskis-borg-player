@@ -46,6 +46,9 @@ import WorkoutPassView from "./pro/WorkoutPassView";
 import {
   useUserProfile,
 } from "../context/UserProfileContext";
+import {
+  virtualCyclingSpeedKmh,
+} from "../lib/virtualCyclingSpeed";
 
 type Props = {
   setup: TrainingSetup;
@@ -439,20 +442,102 @@ export default function SpinningView({
       null
     );
 
+  /*
+   * VIRTUAL CYCLING SPEED v0.1
+   *
+   * BODY BIKE ger oss watt och kadens men ingen
+   * separat hastighet i den BLE-data vi använder.
+   *
+   * Om vi senare får riktig BLE-hastighet ska den
+   * alltid prioriteras framför detta värde.
+   */
+  const virtualSpeedKmh =
+    useMemo(
+      () =>
+        virtualCyclingSpeedKmh(
+          powerWatts
+        ),
+      [powerWatts]
+    );
+
+  const [
+    virtualDistanceKm,
+    setVirtualDistanceKm,
+  ] = useState(0);
+
   const {
     activityState,
     elapsedSeconds,
     summary,
-    startTraining,
+    startTraining: startTrainingBase,
     stopTraining,
-    resetTraining,
+    resetTraining: resetTrainingBase,
   } = useTrainingSession({
     heartRate,
-    speedKmh: null,
-    distanceKm: null,
+    speedKmh: virtualSpeedKmh,
+    distanceKm: virtualDistanceKm,
     powerWatts,
     cadenceRpm,
   });
+
+  /*
+   * Integrera virtuell hastighet till distans.
+   *
+   * Hookens elapsedSeconds tickar en gång per sekund,
+   * så varje tick motsvarar:
+   *
+   *   km/h / 3600 = km per sekund
+   */
+  const previousElapsedSeconds =
+    useRef(0);
+
+  useEffect(() => {
+    if (
+      activityState !== "recording"
+    ) {
+      previousElapsedSeconds.current =
+        elapsedSeconds;
+      return;
+    }
+
+    const deltaSeconds =
+      elapsedSeconds -
+      previousElapsedSeconds.current;
+
+    previousElapsedSeconds.current =
+      elapsedSeconds;
+
+    if (
+      deltaSeconds <= 0 ||
+      virtualSpeedKmh === null
+    ) {
+      return;
+    }
+
+    setVirtualDistanceKm(
+      (current) =>
+        current +
+        (virtualSpeedKmh *
+          deltaSeconds) /
+          3600
+    );
+  }, [
+    activityState,
+    elapsedSeconds,
+    virtualSpeedKmh,
+  ]);
+
+  const startTraining = () => {
+    setVirtualDistanceKm(0);
+    previousElapsedSeconds.current = 0;
+    startTrainingBase();
+  };
+
+  const resetTraining = () => {
+    setVirtualDistanceKm(0);
+    previousElapsedSeconds.current = 0;
+    resetTrainingBase();
+  };
 
   /*
    * Sessionen kan komma från två håll:
@@ -1107,8 +1192,8 @@ export default function SpinningView({
             maxHeartRatePercent={
               currentMaxHeartRatePercent
             }
-            speedKmh={null}
-            distanceKm={null}
+            speedKmh={virtualSpeedKmh}
+            distanceKm={virtualDistanceKm}
             onBack={onBack}
             live={
               status === "running" ||
@@ -1301,8 +1386,8 @@ export default function SpinningView({
           maxHeartRatePercent={
             currentMaxHeartRatePercent
           }
-          speedKmh={null}
-          distanceKm={null}
+          speedKmh={virtualSpeedKmh}
+          distanceKm={virtualDistanceKm}
           onBack={onBack}
           live={
             anySensorConnected

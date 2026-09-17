@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import {
   createContext,
   ReactNode,
@@ -15,6 +16,8 @@ export type UserProfile = {
   weightKg: number | null;
   ftpWatts: number | null;
   maxHeartRate: number | null;
+  showOtherBluetoothDevices: boolean;
+  showIndoorWalking: boolean;
 };
 
 type UserProfileContextValue = {
@@ -29,6 +32,8 @@ const DEFAULT_PROFILE: UserProfile = {
   weightKg: null,
   ftpWatts: null,
   maxHeartRate: null,
+  showOtherBluetoothDevices: false,
+  showIndoorWalking: false,
 };
 
 const UserProfileContext =
@@ -86,6 +91,14 @@ export function UserProfileProvider({
               "number"
                 ? parsed.maxHeartRate
                 : null,
+
+            showOtherBluetoothDevices:
+              parsed.showOtherBluetoothDevices ===
+              true,
+
+            showIndoorWalking:
+              parsed.showIndoorWalking ===
+              true,
           });
         }
       } catch (error) {
@@ -107,29 +120,27 @@ export function UserProfileProvider({
     };
   }, []);
 
-  useEffect(() => {
-    if (!loaded) {
-      return;
-    }
-
-    AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(profile)
-    ).catch((error) => {
-      console.warn(
-        "Kunde inte spara användarprofil",
-        error
-      );
-    });
-  }, [profile, loaded]);
-
   const updateProfile = (
     changes: Partial<UserProfile>
   ) => {
-    setProfile((current) => ({
-      ...current,
-      ...changes,
-    }));
+    setProfile((current) => {
+      const next = {
+        ...current,
+        ...changes,
+      };
+
+      AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(next)
+      ).catch((error) => {
+        console.warn(
+          "Kunde inte spara användarprofil",
+          error
+        );
+      });
+
+      return next;
+    });
   };
 
   const value =

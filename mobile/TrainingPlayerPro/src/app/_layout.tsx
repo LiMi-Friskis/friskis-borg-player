@@ -32,6 +32,9 @@ import AppTabs from "@/components/app-tabs";
 import {
   TabBarContext,
 } from "@/context/TabBarContext";
+import {
+  UserProfileProvider,
+} from "@/context/UserProfileContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -69,6 +72,7 @@ export default function TabLayout() {
           : DefaultTheme
       }
     >
+      <UserProfileProvider>
       <TabBarContext.Provider
         value={{
           setTabBarHidden,
@@ -80,6 +84,7 @@ export default function TabLayout() {
           hidden={isTabBarHidden}
         />
       </TabBarContext.Provider>
+      </UserProfileProvider>
     </ThemeProvider>
   );
 }

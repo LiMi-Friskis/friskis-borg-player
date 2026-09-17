@@ -18,6 +18,10 @@ import {
   Device,
 } from "@sfourdrinier/react-native-ble-plx";
 
+import {
+  useUserProfile,
+} from "@/context/UserProfileContext";
+
 export type Capability =
   | "heart-rate"
   | "running-speed-cadence"
@@ -70,6 +74,10 @@ export default function DeviceManager({
   initialMode = null,
   proPassName = null,
 }: Props) {
+  const {
+    profile,
+  } = useUserProfile();
+
   const manager =
     useRef(
       new BleManager()
@@ -989,8 +997,9 @@ export default function DeviceManager({
           )
         )}
 
-        {otherDevices.length >
-          0 && (
+        {profile.showOtherBluetoothDevices &&
+          otherDevices.length >
+            0 && (
           <>
             <Pressable
               style={
@@ -1087,6 +1096,7 @@ export default function DeviceManager({
               )}
             </Pressable>
 
+            {profile.showIndoorWalking && (
             <Pressable
               style={[
                 styles.modeCard,
@@ -1130,6 +1140,7 @@ export default function DeviceManager({
                 </Text>
               )}
             </Pressable>
+            )}
           </View>
         )}
 

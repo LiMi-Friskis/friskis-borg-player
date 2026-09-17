@@ -308,7 +308,6 @@ export default function HomeScreen() {
               styles.brand
             }
           >
-            Friskis
           </Text>
 
           <View
