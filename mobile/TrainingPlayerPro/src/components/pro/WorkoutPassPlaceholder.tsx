@@ -7,7 +7,6 @@ import {
   View,
 } from "react-native";
 
-import ProHeader from "./ProHeader";
 
 import {
   LiveSession,
@@ -169,16 +168,6 @@ export default function WorkoutPassPlaceholder({
           onBack={onBack}
           live={live}
           label={statusLabel}
-        />
-
-        <ProHeader
-          title="Spinning"
-          subtitle={
-            connected
-              ? passName ??
-                "Anslutet pass"
-              : "Pass"
-          }
         />
 
         <ScrollView
@@ -406,8 +395,8 @@ export default function WorkoutPassPlaceholder({
             }
           >
             {recording
-              ? "Stoppa träning"
-              : "Starta träning"}
+              ? "■  Stoppa träning"
+              : "●  Starta träning"}
           </Text>
         </Pressable>
       </View>
@@ -481,7 +470,7 @@ const styles =
     },
 
     scrollContent: {
-      paddingTop: 22,
+      paddingTop: 10,
       paddingBottom: 24,
     },
 

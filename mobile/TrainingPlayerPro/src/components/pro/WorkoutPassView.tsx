@@ -5,7 +5,6 @@ import {
   View,
 } from "react-native";
 
-import ProHeader from "./ProHeader";
 import WorkoutTrainingControl from "./WorkoutTrainingControl";
 
 type DisplayTarget = {
@@ -129,10 +128,14 @@ export default function WorkoutPassView({
           label={statusLabel}
         />
 
-        <ProHeader
-          title={passName}
-          subtitle="Pass"
-        />
+        <View style={styles.passHeader}>
+          <Text
+            style={styles.passName}
+            numberOfLines={2}
+          >
+            {passName}
+          </Text>
+        </View>
 
         {currentBlock ? (
           <>
@@ -459,6 +462,9 @@ function TopBar({
             styles.statusBadgeLive,
         ]}
       >
+        {live && (
+          <View style={styles.liveDot} />
+        )}
         <Text
           style={styles.statusText}
         >
@@ -497,6 +503,9 @@ const styles = StyleSheet.create({
   },
 
   statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
@@ -504,7 +513,14 @@ const styles = StyleSheet.create({
   },
 
   statusBadgeLive: {
-    backgroundColor: "#E31836",
+    backgroundColor: "#10281a",
+  },
+
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#30d158",
   },
 
   statusText: {
@@ -512,6 +528,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.7,
+  },
+
+  passHeader: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    marginTop: 8,
+    marginBottom: 4,
+    minHeight: 50,
+  },
+
+  passName: {
+    color: "#ffffff",
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: "800",
+    textAlign: "center",
+    width: "100%",
   },
 
   currentCard: {

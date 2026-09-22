@@ -465,6 +465,11 @@ export default function SpinningView({
     setVirtualDistanceKm,
   ] = useState(0);
 
+  const [
+    caloriesKcal,
+    setCaloriesKcal,
+  ] = useState(0);
+
   const {
     activityState,
     elapsedSeconds,
@@ -521,20 +526,43 @@ export default function SpinningView({
           deltaSeconds) /
           3600
     );
+
+    if (
+      powerWatts !== null &&
+      powerWatts > 0
+    ) {
+      const mechanicalJoules =
+        powerWatts *
+        deltaSeconds;
+
+      const metabolicKcal =
+        mechanicalJoules /
+        0.24 /
+        4184;
+
+      setCaloriesKcal(
+        (current) =>
+          current +
+          metabolicKcal
+      );
+    }
   }, [
     activityState,
     elapsedSeconds,
     virtualSpeedKmh,
+    powerWatts,
   ]);
 
   const startTraining = () => {
     setVirtualDistanceKm(0);
+    setCaloriesKcal(0);
     previousElapsedSeconds.current = 0;
     startTrainingBase();
   };
 
   const resetTraining = () => {
     setVirtualDistanceKm(0);
+    setCaloriesKcal(0);
     previousElapsedSeconds.current = 0;
     resetTrainingBase();
   };
@@ -1174,6 +1202,9 @@ export default function SpinningView({
             elapsedSeconds={
               elapsedSeconds
             }
+            caloriesKcal={
+              caloriesKcal
+            }
             powerWatts={
               powerWatts
             }
@@ -1368,6 +1399,9 @@ export default function SpinningView({
           elapsedSeconds={
             elapsedSeconds
           }
+          caloriesKcal={
+            caloriesKcal
+          }
           powerWatts={
             powerWatts
           }
@@ -1427,16 +1461,6 @@ export default function SpinningView({
             anySensorConnected
               ? "LIVE"
               : "VÄNTAR"
-          }
-        />
-
-        <ProHeader
-          title="Spinning"
-          subtitle={
-            activityState ===
-            "recording"
-              ? "Träning pågår"
-              : "Fristående träning"
           }
         />
 
@@ -1630,7 +1654,7 @@ export default function SpinningView({
                   styles.stopButtonText
                 }
               >
-                Stoppa träning
+                ■  Stoppa träning
               </Text>
             </Pressable>
           ) : (
@@ -1647,7 +1671,7 @@ export default function SpinningView({
                   styles.primaryButtonText
                 }
               >
-                Starta träning
+                ●  Starta träning
               </Text>
             </Pressable>
           )}
@@ -2006,10 +2030,14 @@ function WaitingScreen({
           label="ANSLUTEN"
         />
 
-        <ProHeader
-          title="Spinning"
-          subtitle={passName}
-        />
+        <View style={styles.sessionPassHeader}>
+          <Text
+            style={styles.sessionPassName}
+            numberOfLines={2}
+          >
+            {passName}
+          </Text>
+        </View>
 
         <View
           style={
@@ -2160,10 +2188,14 @@ function CountdownScreen({
           label="STARTAR"
         />
 
-        <ProHeader
-          title="Spinning"
-          subtitle={passName}
-        />
+        <View style={styles.sessionPassHeader}>
+          <Text
+            style={styles.sessionPassName}
+            numberOfLines={2}
+          >
+            {passName}
+          </Text>
+        </View>
 
         <View
           style={
@@ -2364,11 +2396,6 @@ function ProSessionView({
           }
         />
 
-        <ProHeader
-          title="Spinning"
-          subtitle={passName}
-        />
-
         <View
           style={
             styles.sensorRow
@@ -2518,11 +2545,13 @@ function ProSessionView({
                         ),
                       backgroundColor:
                         block.color,
-                      opacity:
-                        index ===
-                        currentBlockIndex
-                          ? 1
-                          : 0.35,
+                      height: Math.max(
+                        4,
+                        (46 *
+                          (block.intensityHeightPercent ??
+                            0)) /
+                          100
+                      ),
                     },
                   ]}
                 />
@@ -2555,14 +2584,6 @@ function ProSessionView({
             },
           ]}
         >
-          <Text
-            style={
-              styles.blockEyebrow
-            }
-          >
-            AKTUELLT BLOCK
-          </Text>
-
           <Text
             style={
               styles.blockTitle
@@ -2753,7 +2774,7 @@ function ProSessionView({
                   styles.proStopText
                 }
               >
-                Stoppa registrering
+                ■  Stoppa träning
               </Text>
             </Pressable>
           ) : (
@@ -2770,7 +2791,7 @@ function ProSessionView({
                   styles.primaryButtonText
                 }
               >
-                Starta registrering
+                ●  Starta träning
               </Text>
             </Pressable>
           )}
@@ -3026,6 +3047,25 @@ const styles =
       letterSpacing: 2,
     },
 
+    sessionPassHeader: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 8,
+      marginTop: 8,
+      marginBottom: 4,
+      minHeight: 50,
+    },
+
+    sessionPassName: {
+      color: "#ffffff",
+      fontSize: 24,
+      lineHeight: 29,
+      fontWeight: "800",
+      textAlign: "center",
+      width: "100%",
+    },
+
     sensorRow: {
       flexDirection: "row",
       gap: 9,
@@ -3092,8 +3132,8 @@ const styles =
 
     blockTime: {
       color: "#ffffff",
-      fontSize: 42,
-      lineHeight: 46,
+      fontSize: 30,
+      lineHeight: 35,
       fontWeight: "800",
       fontVariant: [
         "tabular-nums",
@@ -3106,10 +3146,11 @@ const styles =
     },
 
     sessionTime: {
-      color: "#d0d0d4",
-      fontSize: 20,
-      fontWeight: "700",
-      marginTop: 3,
+      color: "#ffffff",
+      fontSize: 30,
+      lineHeight: 35,
+      fontWeight: "800",
+      marginTop: 0,
       fontVariant: [
         "tabular-nums",
       ],
@@ -3117,19 +3158,20 @@ const styles =
 
     profileWrapper: {
       position: "relative",
-      marginTop: 13,
-      height: 26,
-      justifyContent: "center",
+      marginTop: 10,
+      height: 52,
+      justifyContent: "flex-end",
     },
 
     profileRow: {
       flexDirection: "row",
-      height: 12,
+      alignItems: "flex-end",
+      height: 46,
       gap: 3,
     },
 
     profileSegment: {
-      borderRadius: 4,
+      borderRadius: 0,
     },
 
     profileMarker: {
@@ -3289,24 +3331,29 @@ const styles =
     },
 
     proBottom: {
-      marginTop: "auto",
-      paddingTop: 8,
+      position: "absolute",
+      left: 20,
+      right: 20,
+      bottom: 26,
+      zIndex: 20,
     },
 
     proStartButton: {
+      height: 54,
       backgroundColor:
         "#E31836",
-      borderRadius: 17,
+      borderRadius: 18,
       alignItems: "center",
-      paddingVertical: 15,
+      justifyContent: "center",
     },
 
     proStopButton: {
+      height: 54,
       backgroundColor:
         "#ffffff",
-      borderRadius: 17,
+      borderRadius: 18,
       alignItems: "center",
-      paddingVertical: 15,
+      justifyContent: "center",
     },
 
     proStopText: {

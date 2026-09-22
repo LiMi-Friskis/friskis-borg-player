@@ -5,65 +5,56 @@ import {
   Text,
   View,
 } from "react-native";
-
-import ProHeader from "./ProHeader";
+import {
+  useMemo,
+  useState,
+} from "react";
 
 type Props = {
   elapsedSeconds: number;
-
-  powerWatts:
-    | number
-    | null;
-
-  ftpPercent:
-    | number
-    | null;
-
-  wattsPerKg:
-    | number
-    | null;
-
-  cadenceRpm:
-    | number
-    | null;
-
-  heartRate:
-    | number
-    | null;
-
-  maxHeartRatePercent:
-    | number
-    | null;
-
-  speedKmh:
-    | number
-    | null;
-
-  distanceKm:
-    | number
-    | null;
-
+  caloriesKcal: number;
+  powerWatts: number | null;
+  ftpPercent: number | null;
+  wattsPerKg: number | null;
+  cadenceRpm: number | null;
+  heartRate: number | null;
+  maxHeartRatePercent: number | null;
+  speedKmh: number | null;
+  distanceKm: number | null;
   onBack: () => void;
-
   live: boolean;
-
   statusLabel: string;
-
   recording: boolean;
-
   onStartTraining: () => void;
-
   onStopTraining: () => void;
+};
+
+type MetricId =
+  | "time"
+  | "power"
+  | "ftp"
+  | "wkg"
+  | "cadence"
+  | "heartRate"
+  | "maxHeartRate"
+  | "speed"
+  | "distance"
+  | "calories";
+
+type Metric = {
+  id: MetricId;
+  label: string;
+  value: string;
+  unit: string;
 };
 
 function formatTime(
   seconds: number
 ) {
-  const safe =
-    Math.max(
-      0,
-      Math.floor(seconds)
-    );
+  const safe = Math.max(
+    0,
+    Math.floor(seconds)
+  );
 
   const hours =
     Math.floor(safe / 3600);
@@ -73,8 +64,7 @@ function formatTime(
       (safe % 3600) / 60
     );
 
-  const secs =
-    safe % 60;
+  const secs = safe % 60;
 
   if (hours > 0) {
     return [
@@ -148,28 +138,54 @@ function TopBar({
 }
 
 function DataCard({
-  label,
-  value,
-  unit,
+  metric,
+  selected,
+  onPress,
 }: {
-  label: string;
-  value: string;
-  unit: string;
+  metric: Metric;
+  selected: boolean;
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.card}>
-      <Text style={styles.label}>
-        {label}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        selected &&
+          styles.cardSelected,
+        pressed &&
+          styles.cardPressed,
+      ]}
+    >
+      <Text
+        style={[
+          styles.label,
+          selected &&
+            styles.labelSelected,
+        ]}
+        numberOfLines={1}
+      >
+        {metric.label}
       </Text>
 
-      <Text style={styles.value}>
-        {value}
-      </Text>
+      <View style={styles.cardValueRow}>
+        <Text
+          style={styles.value}
+          numberOfLines={1}
+        >
+          {metric.value}
+        </Text>
 
-      <Text style={styles.unit}>
-        {unit}
-      </Text>
-    </View>
+        {metric.unit !== "" && (
+          <Text
+            style={styles.unitInline}
+            numberOfLines={1}
+          >
+            {metric.unit}
+          </Text>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
@@ -196,11 +212,13 @@ function TrainingControl({
       }
     >
       <Text
-        style={styles.trainingButtonText}
+        style={
+          styles.trainingButtonText
+        }
       >
         {recording
-          ? "Stoppa träning"
-          : "Starta träning"}
+          ? "■  Stoppa träning"
+          : "●  Starta träning"}
       </Text>
     </Pressable>
   );
@@ -208,6 +226,7 @@ function TrainingControl({
 
 export default function WorkoutDataView({
   elapsedSeconds,
+  caloriesKcal,
   powerWatts,
   ftpPercent,
   wattsPerKg,
@@ -223,6 +242,148 @@ export default function WorkoutDataView({
   onStartTraining,
   onStopTraining,
 }: Props) {
+  const [
+    selectedMetricId,
+    setSelectedMetricId,
+  ] = useState<MetricId>("time");
+
+  const metrics =
+    useMemo<Metric[]>(
+      () => [
+        {
+          id: "power",
+          label: "EFFEKT",
+          value:
+            powerWatts !== null
+              ? String(
+                  Math.round(
+                    powerWatts
+                  )
+                )
+              : "--",
+          unit: "W",
+        },
+        {
+          id: "ftp",
+          label: "% FTP",
+          value:
+            ftpPercent !== null
+              ? String(
+                  Math.round(
+                    ftpPercent
+                  )
+                )
+              : "--",
+          unit: "%",
+        },
+        {
+          id: "wkg",
+          label: "W / KG",
+          value:
+            wattsPerKg !== null
+              ? wattsPerKg.toFixed(2)
+              : "--",
+          unit: "W/kg",
+        },
+        {
+          id: "cadence",
+          label: "KADENS",
+          value:
+            cadenceRpm !== null
+              ? String(
+                  Math.round(
+                    cadenceRpm
+                  )
+                )
+              : "--",
+          unit: "RPM",
+        },
+        {
+          id: "heartRate",
+          label: "PULS",
+          value:
+            heartRate !== null
+              ? String(
+                  Math.round(
+                    heartRate
+                  )
+                )
+              : "--",
+          unit: "BPM",
+        },
+        {
+          id: "maxHeartRate",
+          label: "% MAXPULS",
+          value:
+            maxHeartRatePercent !==
+            null
+              ? String(
+                  Math.round(
+                    maxHeartRatePercent
+                  )
+                )
+              : "--",
+          unit: "%",
+        },
+        {
+          id: "speed",
+          label: "HASTIGHET",
+          value:
+            speedKmh !== null
+              ? speedKmh.toFixed(1)
+              : "--",
+          unit: "km/h",
+        },
+        {
+          id: "distance",
+          label: "DISTANS",
+          value:
+            distanceKm !== null
+              ? distanceKm.toFixed(2)
+              : "--",
+          unit: "km",
+        },
+        {
+          id: "time",
+          label: "TRÄNINGSTID",
+          value:
+            formatTime(
+              elapsedSeconds
+            ),
+          unit: "",
+        },
+        {
+          id: "calories",
+          label: "KCAL",
+          value: String(
+            Math.round(
+              caloriesKcal
+            )
+          ),
+          unit: "kcal",
+        },
+      ],
+      [
+        elapsedSeconds,
+        caloriesKcal,
+        powerWatts,
+        ftpPercent,
+        wattsPerKg,
+        cadenceRpm,
+        heartRate,
+        maxHeartRatePercent,
+        speedKmh,
+        distanceKm,
+      ]
+    );
+
+  const selectedMetric =
+    metrics.find(
+      (metric) =>
+        metric.id ===
+        selectedMetricId
+    ) ?? metrics[8];
+
   return (
     <SafeAreaView
       style={styles.container}
@@ -234,132 +395,64 @@ export default function WorkoutDataView({
           label={statusLabel}
         />
 
-        <ProHeader
-          title="Spinning"
-          subtitle="Data"
-        />
-
-        <View style={styles.timeArea}>
-          <Text style={styles.timeLabel}>
-            TRÄNINGSTID
+        <View
+          style={styles.heroArea}
+        >
+          <Text
+            style={styles.heroLabel}
+          >
+            {selectedMetric.label}
           </Text>
 
-          <Text style={styles.time}>
-            {formatTime(
-              elapsedSeconds
+          <View
+            style={styles.heroValueRow}
+          >
+            <Text
+              style={styles.heroValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {selectedMetric.value}
+            </Text>
+
+            {selectedMetric.unit !==
+              "" && (
+              <Text
+                style={styles.heroUnit}
+              >
+                {selectedMetric.unit}
+              </Text>
             )}
-          </Text>
+          </View>
         </View>
 
         <View style={styles.grid}>
-          <DataCard
-            label="EFFEKT"
-            value={
-              powerWatts !== null
-                ? String(
-                    Math.round(
-                      powerWatts
-                    )
-                  )
-                : "--"
-            }
-            unit="W"
-          />
-
-          <DataCard
-            label="% FTP"
-            value={
-              ftpPercent !== null
-                ? String(
-                    Math.round(
-                      ftpPercent
-                    )
-                  )
-                : "--"
-            }
-            unit="%"
-          />
-
-          <DataCard
-            label="W / KG"
-            value={
-              wattsPerKg !== null
-                ? wattsPerKg.toFixed(
-                    2
-                  )
-                : "--"
-            }
-            unit="W/kg"
-          />
-
-          <DataCard
-            label="KADENS"
-            value={
-              cadenceRpm !== null
-                ? String(
-                    Math.round(
-                      cadenceRpm
-                    )
-                  )
-                : "--"
-            }
-            unit="RPM"
-          />
-
-          <DataCard
-            label="PULS"
-            value={
-              heartRate !== null
-                ? String(
-                    Math.round(
-                      heartRate
-                    )
-                  )
-                : "--"
-            }
-            unit="BPM"
-          />
-
-          <DataCard
-            label="% MAXPULS"
-            value={
-              maxHeartRatePercent !==
-              null
-                ? String(
-                    Math.round(
-                      maxHeartRatePercent
-                    )
-                  )
-                : "--"
-            }
-            unit="%"
-          />
-
-          <DataCard
-            label="HASTIGHET"
-            value={
-              speedKmh !== null
-                ? speedKmh.toFixed(1)
-                : "--"
-            }
-            unit="km/h"
-          />
-
-          <DataCard
-            label="DISTANS"
-            value={
-              distanceKm !== null
-                ? distanceKm.toFixed(2)
-                : "--"
-            }
-            unit="km"
-          />
+          {metrics.map((metric) => (
+            <DataCard
+              key={metric.id}
+              metric={metric}
+              selected={
+                metric.id ===
+                selectedMetricId
+              }
+              onPress={() =>
+                setSelectedMetricId(
+                  metric.id
+                )
+              }
+            />
+          ))}
         </View>
 
         <TrainingControl
           recording={recording}
-          onStart={onStartTraining}
-          onStop={onStopTraining}
+          onStart={
+            onStartTraining
+          }
+          onStop={
+            onStopTraining
+          }
         />
       </View>
     </SafeAreaView>
@@ -385,13 +478,13 @@ const styles =
       alignItems: "center",
       justifyContent:
         "space-between",
-      minHeight: 48,
-      marginBottom: 8,
+      minHeight: 42,
+      marginBottom: 2,
     },
 
     back: {
       color: "#d2d2d7",
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: "700",
     },
 
@@ -399,8 +492,8 @@ const styles =
       flexDirection: "row",
       alignItems: "center",
       gap: 7,
-      paddingHorizontal: 13,
-      paddingVertical: 9,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
       borderRadius: 20,
       backgroundColor: "#1a1a1d",
     },
@@ -427,66 +520,106 @@ const styles =
       letterSpacing: 1.5,
     },
 
-    timeArea: {
+    heroArea: {
       alignItems: "center",
-      marginTop: 16,
-      marginBottom: 14,
+      justifyContent: "center",
+      minHeight: 96,
+      marginBottom: 8,
     },
 
-    timeLabel: {
+    heroLabel: {
       color: "#77777d",
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: "800",
       letterSpacing: 1.4,
     },
 
-    time: {
+    heroValueRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "center",
+      marginTop: 1,
+    },
+
+    heroValue: {
       color: "#ffffff",
-      fontSize: 44,
-      lineHeight: 50,
+      fontSize: 62,
+      lineHeight: 68,
       fontWeight: "800",
-      marginTop: 2,
       fontVariant: [
         "tabular-nums",
       ],
     },
 
+    heroUnit: {
+      color: "#8e8e94",
+      fontSize: 16,
+      fontWeight: "700",
+      marginLeft: 6,
+    },
+
     grid: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 8,
+      justifyContent:
+        "space-between",
+      rowGap: 6,
     },
 
     card: {
-      width: "48.8%",
-      minHeight: 94,
+      width: "49%",
+      height: 61,
       backgroundColor: "#18181b",
-      borderRadius: 18,
+      borderRadius: 15,
       alignItems: "center",
       justifyContent: "center",
-      padding: 8,
+      paddingHorizontal: 6,
+      borderWidth: 1,
+      borderColor: "transparent",
+    },
+
+    cardSelected: {
+      borderColor: "#5a5a60",
+      backgroundColor: "#202024",
+    },
+
+    cardPressed: {
+      opacity: 0.72,
     },
 
     label: {
       color: "#7d7d83",
       fontSize: 9,
       fontWeight: "800",
-      letterSpacing: 1.05,
+      letterSpacing: 0.9,
+    },
+
+    labelSelected: {
+      color: "#b7b7bc",
+    },
+
+    cardValueRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "center",
+      marginTop: 1,
     },
 
     value: {
       color: "#ffffff",
-      fontSize: 31,
-      lineHeight: 35,
+      fontSize: 26,
+      lineHeight: 30,
       fontWeight: "800",
-      marginTop: 2,
+      fontVariant: [
+        "tabular-nums",
+      ],
     },
 
-    unit: {
+    unitInline: {
       color: "#89898f",
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "700",
-      marginTop: 1,
+      marginLeft: 4,
     },
 
     trainingButton: {

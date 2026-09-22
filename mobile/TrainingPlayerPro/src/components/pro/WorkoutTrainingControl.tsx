@@ -33,8 +33,8 @@ export default function WorkoutTrainingControl({
       >
         <Text style={styles.text}>
           {recording
-            ? "Stoppa träning"
-            : "Starta träning"}
+            ? "■  Stoppa träning"
+            : "●  Starta träning"}
         </Text>
       </Pressable>
     </View>
