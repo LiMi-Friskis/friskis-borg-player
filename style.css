@@ -479,7 +479,7 @@ select.borginput{
 .liveProfile,.dash-profile{gap:0}
 .liveProfile .bar,.dash-profile .bar{
   flex-shrink:0;
+  min-width:0;
   box-sizing:border-box;
-  border-right:3px solid #05090b;
+  border:0;
 }
-.liveProfile .bar:last-of-type,.dash-profile .bar:last-of-type{border-right:0}
