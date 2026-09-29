@@ -474,3 +474,12 @@ select.borginput{
   background-size:16px 16px;
   padding-right:28px;
 }
+
+/* Beta 1.0 hotfix: exakt tidsgeometri i körprofilen */
+.liveProfile,.dash-profile{gap:0}
+.liveProfile .bar,.dash-profile .bar{
+  flex-shrink:0;
+  box-sizing:border-box;
+  border-right:3px solid #05090b;
+}
+.liveProfile .bar:last-of-type,.dash-profile .bar:last-of-type{border-right:0}

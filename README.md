@@ -1,16 +1,11 @@
-# Friskis Training Player — Beta 1.0
+Friskis Training Player – Beta 1.0
+Hotfix: exakt tidsgeometri i passdiagrammet.
 
-## Uppdatering
-Ersätt följande filer i webbrotens/main-branchens root:
+Ändring:
+- Staplarnas tidsbredder upptar nu exakt 100 % av diagrammet.
+- Mellanrummen mellan staplarna påverkar inte längre tidsgeometrin.
+- Tidsindikatorn och staplarna använder därmed samma skala.
+- Passklocka, 10 s förstart, blocktider och Pro/Realtime är orörda.
 
-- `app.js`
-- `index.html`
-
-Ingen SQL-ändring krävs. `style.css` från 2.5.7 ska ligga kvar oförändrad.
-
-## Ändringar
-- Versionsnamnet är nu **Beta 1.0**.
-- Det inbyggda passet **Kort demo – 8 min** är borttaget.
-- Gamla inbyggda demo-pass filtreras även bort ur lokal cache och visas inte offline.
-- Inga centralt sparade pass i Supabase tas bort eller ändras.
-- Alla funktioner och hotfixar från 2.5.7 är i övrigt oförändrade.
+Installation:
+Ersätt endast style.css.
