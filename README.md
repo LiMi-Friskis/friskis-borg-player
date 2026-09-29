@@ -1,23 +1,23 @@
 # Friskis Training Player – update
 
-Detta paket innehåller bara filerna som behöver ersättas i GitHub-repots rot:
+Ersätt dessa filer i GitHub-repots rot på `main`:
 
-- `index.html`
 - `app.js`
-- `style.css`
+- `index.html`
 
-Ladda upp/ersätt dessa tre filer i `main`. Ingen SQL behöver köras och inga övriga filer ska ändras.
+Ingen SQL behöver köras. `style.css` och övriga filer är oförändrade.
 
-## Innehåll
-- Väntrummets kontrast/färger från 2.5.3.
-- `pass_snapshot.blocks[]` innehåller nu `intensityHeightPercent`, beräknat med exakt samma `intensityHeight(p, part)` som webbdiagrammet använder.
-- `targets` och övrigt snapshot-kontrakt är oförändrade.
-- Versionsvisningen är `Prototype 2.5.4 · Snapshot Height v0.1`.
+## Ändring
+Borg-färger hämtas nu från intensitetsregistrets `color_hex`, på samma sätt som övriga dynamiska intensitetsvärden. Den gamla hårdkodade Borg-färgskalan finns kvar endast som fallback om ett registervärde saknas.
+
+Det innebär exempelvis att Borg 20 använder den färg som är satt i registret (`#E31836` i nuvarande inställning), i stället för den gamla hårdkodade mörkröda färgen.
+
+Snapshot-kontrakt, `targets`, `intensityHeightPercent`, FTP-logik och övrig spelarlogik är oförändrade.
+
+Version: `Prototype 2.5.5 · Borg Register Colors v0.1`
 
 ## Kontroll efter deploy
 1. Hårduppdatera sidan.
-2. Kontrollera att versionsraden visar `Prototype 2.5.4 · Snapshot Height v0.1`.
-3. Starta ett nytt `KÖR MED PRO`-pass.
-4. Kontrollera i `live_sessions.pass_snapshot` att varje block har `intensityHeightPercent` på blocknivå.
-
-Paketnamnet är avsiktligt generiskt och kan återanvändas för kommande webbuppdateringar.
+2. Kontrollera versionsraden.
+3. Öppna ett Borg-pass och kontrollera nivå 20 mot Registervård → Intensitetsvärden.
+4. Starta gärna ett Pro-pass och kontrollera att `block.color` i ett nytt snapshot följer samma registerfärg.
