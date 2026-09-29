@@ -461,3 +461,16 @@ main{padding-top:24px;padding-bottom:76px}
 .participant-waiting .pro-connect-help{color:#666a70}
 .participant-waiting .pro-pass-meta{color:#4f5256}
 .participant-waiting .pro-cancel-button{color:#666a70}
+
+/* 2.5.7 hotfix: Borg/intensity editor select must render the exact register color.
+   Native select styling (especially focused state) can darken/alter background colors. */
+select.borginput{
+  -webkit-appearance:none;
+  appearance:none;
+  background-color:var(--intensity-color,#151c20)!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='m7 10 5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 7px center;
+  background-size:16px 16px;
+  padding-right:28px;
+}
