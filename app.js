@@ -11,19 +11,6 @@ let registries={activities:[],models:[],values:[],descriptions:[],moments:[]};
 let registryErrors=[];
 let settings=Object.assign({prestart:10,soundPrestart:false,soundBlock:false},JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'));
 
-const demo={id:'demo-local',name:'Spinning 45 – Intervall',parts:[
-['5:00',10,'Uppvärmning','Hitta rytmen'],['4:00',12,'Tempo','Öka successivt'],['3:00',14,'Backe – sittande','Kontrollerat'],
-['2:00',11,'Återhämtning','Lätt'],['4:00',15,'Backe – stående','Tryck'],['3:00',16,'Tempo','Jämnt hårt'],['2:00',12,'Återhämtning',''],
-['4:00',17,'Intervall','Hårt'],['3:00',14,'Tempo',''],['2:00',11,'Återhämtning',''],['4:00',16,'Backe – sittande',''],
-['3:00',14,'Tempo',''],['2:00',12,'Återhämtning',''],['4:00',10,'Nedvarvning','Lugnt']
-].map((x,i)=>({id:i+1,time:x[0],borg:x[1],moment:x[2],instruction:x[3]}))};
-
-const shortDemo={id:'demo-short',name:'Kort demo – 8 min',parts:[
-['1:30',9,'Uppvärmning','Lätt och ledigt'],['1:30',12,'Tempo','Hitta rytmen'],['1:00',14,'Backe – sittande','Öka motstånd'],
-['1:00',11,'Återhämtning','Släpp av'],['1:00',16,'Intervall','Kontrollerat hårt'],['1:00',12,'Återhämtning','Lugnt'],
-['1:00',9,'Nedvarvning','Avsluta mjukt']
-].map((x,i)=>({id:'s'+(i+1),time:x[0],borg:x[1],moment:x[2],instruction:x[3]}))};
-
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
 let liveSession=null;
 let clockBaseMs=0, clockAnchorLocalMs=null;
@@ -40,8 +27,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='PROTOTYPE 2.5.4 · SNAPSHOT HEIGHT v0.1'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','PROTOTYPE 2.5.4 · SNAPSHOT HEIGHT v0.1')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='BETA 1.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','BETA 1.0')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -358,7 +345,7 @@ async function createPassFromMusic(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Prototype 2.5.7 · Borg Select Native Color Hotfix</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Beta 1.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -634,9 +621,10 @@ function setSync(state,msg){
 }
 async function loadPasses(){
   const cached=loadCache();
-  const legacyLocal=cached.filter(p=>!p.remote && p.id!=='demo-short' && !p.builtIn).map(p=>({...p,legacyLocal:true,visibility:'private'}));
-  passes=cached.length?cached:[{...shortDemo,builtIn:true}];
-  if(!passes.some(p=>p.id==='demo-short')) passes.push({...shortDemo,builtIn:true});
+  // Beta 1.0: built-in demo passes are no longer shown. Keep only real cached passes.
+  const cachedReal=cached.filter(p=>p.id!=='demo-short' && p.id!=='demo-local' && !p.builtIn);
+  const legacyLocal=cachedReal.filter(p=>!p.remote).map(p=>({...p,legacyLocal:true,visibility:'private'}));
+  passes=cachedReal;
   list();
   setSync('work','Synkar...');
   try{
@@ -652,14 +640,13 @@ async function loadPasses(){
 
     // Centralt lagrade pass är normalläget. Gamla lokala pass behålls endast
     // tills användaren hunnit importera dem som privata.
-    passes=[...remotePasses,...legacyLocal,{...shortDemo,builtIn:true}];
+    passes=[...remotePasses,...legacyLocal];
 
     cache();
     list();
     setSync('ok','Centralt sparat');
   }catch(e){
     online=false;
-    if(!passes.some(p=>p.id==='demo-short')) passes.push({...shortDemo,builtIn:true});
     list();
     setSync('err','Offline · visar senast synkade pass');
     console.error(e);

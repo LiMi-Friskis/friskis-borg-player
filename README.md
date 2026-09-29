@@ -1,24 +1,16 @@
-# Training Player update — Prototype 2.5.7
+# Friskis Training Player — Beta 1.0
 
-Hotfix för färgen i intensitetsfältet i passeditor.
+## Uppdatering
+Ersätt följande filer i webbrotens/main-branchens root:
 
-## Varför 2.5.6 inte räckte
-JavaScriptet hämtade rätt `color_hex` från registret, men webbläsarens inbyggda/native styling av `<select>` kunde ändra färgen visuellt, framför allt i fokusläget. Det syntes tydligt på Borg 20.
-
-## Ändring
-- Intensitetsfältet använder fortfarande `intensityColor()` och därmed registervärdet.
-- Native select-utseende stängs av för just `.borginput`.
-- Exakt registerfärg skickas via CSS-variabeln `--intensity-color`.
-- En enkel egen vit dropdown-pil visas i stället.
-- Ingen ändring av diagram, passdata, snapshot, Supabase eller Realtime.
-
-## Installera
-Ersätt dessa filer i GitHub `main`:
 - `app.js`
-- `style.css`
 - `index.html`
 
-Ingen SQL behövs.
+Ingen SQL-ändring krävs. `style.css` från 2.5.7 ska ligga kvar oförändrad.
 
-## Test
-Kontrollera särskilt Borg 18, 19 och 20 både med och utan fokus i fältet. De ska visuellt följa `color_hex` i Registervård.
+## Ändringar
+- Versionsnamnet är nu **Beta 1.0**.
+- Det inbyggda passet **Kort demo – 8 min** är borttaget.
+- Gamla inbyggda demo-pass filtreras även bort ur lokal cache och visas inte offline.
+- Inga centralt sparade pass i Supabase tas bort eller ändras.
+- Alla funktioner och hotfixar från 2.5.7 är i övrigt oförändrade.
