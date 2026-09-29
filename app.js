@@ -9,7 +9,7 @@ let auth=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');
 let currentProfile=null, profiles=[];
 let registries={activities:[],models:[],values:[],descriptions:[],moments:[]};
 let registryErrors=[];
-let settings=Object.assign({prestart:10,soundPrestart:false,soundBlock:false},JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'));
+let settings=Object.assign({prestart:10,soundPrestart:true,soundBlock:false},JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'));
 
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
 let liveSession=null;
