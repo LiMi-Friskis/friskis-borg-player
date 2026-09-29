@@ -482,7 +482,7 @@ select.borginput{
   min-width:0;
   box-sizing:border-box;
   border:0;
-  border-right:1px solid #05090b;
+  border-right:2px solid #05090b;
 }
 .liveProfile .bar:last-of-type,.dash-profile .bar:last-of-type{
   border-right:0;
