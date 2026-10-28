@@ -1133,23 +1133,27 @@ function runPrestart(n){
 }
 function state(){let p=active.p,c=0;for(let i=0;i<p.parts.length;i++){let d=sec(p.parts[i].time);if(elapsed<c+d)return{i,part:p.parts[i],into:elapsed-c,left:d-(elapsed-c)};c+=d}return{i:p.parts.length-1,part:p.parts.at(-1),into:sec(p.parts.at(-1).time),left:0}}
 function switchView(){liveView=liveView==='clean'?'dashboard':'clean';localStorage.setItem('friskis-live-view',liveView);drawLive()}
-function finishScreen(){statsFinish(true);if(liveSession){applyClockPosition(total(active.p)*1000,false);void syncLiveSession('finished')}stop();clearSession();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
+function finishScreen(){statsFinish(true);if(liveSession){applyClockPosition(total(active.p)*1000,false);void syncLiveSession('finished')}endPlaybackUI();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
 function restartPass(){requestAutomaticFullscreen();liveSession=null;statsFinish(false);statsNewRun(active.p);elapsed=0;running=false;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()}
 function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="confirmFinish()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
 
 
 
-function trainingActions(){return `<div class="training-actions"><div class="training-actions-buttons"><button onclick="switchView()">▣ BYT VY</button><button onclick="toggleFullscreen()">⛶ HELSKÄRM</button><button onclick="goHome()">MINA PASS</button></div>${proStatusBadge()}</div>`}
+function trainingActions(){return `<div class="training-actions"><div class="training-actions-buttons"><button onclick="switchView()">▣ BYT VY</button><button id="fullscreenToggle" onclick="toggleFullscreen()">${document.fullscreenElement?'⛶ AVSLUTA HELSKÄRM':'⛶ HELSKÄRM'}</button><button onclick="goHome()">MINA PASS</button></div>${proStatusBadge()}</div>`}
+function updateFullscreenButton(){const b=document.querySelector('#fullscreenToggle');if(b)b.textContent=document.fullscreenElement?'⛶ AVSLUTA HELSKÄRM':'⛶ HELSKÄRM'}
+document.addEventListener('fullscreenchange',updateFullscreenButton);
+function leavePlayerFullscreen(){if(document.fullscreenElement&&document.exitFullscreen){void document.exitFullscreen().catch(e=>console.warn('Kunde inte lämna helskärm',e))}}
 function requestAutomaticFullscreen(){
- try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen){const p=document.documentElement.requestFullscreen();if(p?.catch)p.catch(e=>console.info('Automatisk helskärm kunde inte aktiveras',e));}}catch(e){console.info('Automatisk helskärm stöds inte',e)}
+ try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen){const p=document.documentElement.requestFullscreen();if(p?.then)p.then(updateFullscreenButton).catch(e=>console.info('Automatisk helskärm kunde inte aktiveras',e));}}catch(e){console.info('Automatisk helskärm stöds inte',e)}
 }
-async function toggleFullscreen(){try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}catch(e){alert('Helskärm stöds inte fullt ut i den här webbläsaren. Prova Lägg till på hemskärmen på iPad/iPhone.')}}
-function goHome(){statsFinish(false);if(liveSession&&liveSession.status!=='finished'){if(!confirm('Det finns en aktiv Pro-session. Vill du avsluta den och gå till Mina Pass?'))return;applyClockPosition(currentPositionMs(),false);void syncLiveSession('finished');liveSession=null}stop();clearSession();setHomeButton(false);list()}
-function saveSession(){if(active&&active.p)localStorage.setItem(SESSION_KEY,JSON.stringify({pass:active.p,elapsed,view:liveView}))}
+async function toggleFullscreen(){try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen();updateFullscreenButton()}catch(e){alert('Helskärm stöds inte fullt ut i den här webbläsaren. Prova Lägg till på hemskärmen på iPad/iPhone.')}}
+function goHome(){if(liveSession&&liveSession.status!=='finished'&&!confirm('Det finns en aktiv Pro-session. Vill du avsluta den och gå till Mina Pass?'))return;statsFinish(false);if(liveSession&&liveSession.status!=='finished'){applyClockPosition(currentPositionMs(),false);void syncLiveSession('finished');liveSession=null}endPlaybackUI();setHomeButton(false);list()}
+function saveSession(){if(running&&active&&active.p)localStorage.setItem(SESSION_KEY,JSON.stringify({pass:active.p,elapsed,view:liveView}))}
 function clearSession(){localStorage.removeItem(SESSION_KEY)}
+function endPlaybackUI(){stop();clearSession();leavePlayerFullscreen()}
 function checkResume(){try{let x=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!x||!x.pass||x.elapsed<=0||x.elapsed>=total(x.pass))return;stop();active={p:x.pass};elapsed=x.elapsed;liveView=x.view||liveView;setBrand(x.pass.name,'');setHomeButton(false);app.innerHTML=`<div class="resume-box"><h2>Återuppta pass?</h2><p><b>${x.pass.name}</b></p><p class="muted">Sparad position: ${fmt(x.elapsed)}</p><div class="actions"><button class="primary" onclick="resumePass()">ÅTERUPPTA</button><button onclick="restartSaved()">BÖRJA OM</button><button onclick="discardSaved()">MINA PASS</button></div></div>`}catch(e){}}
 function resumePass(){requestAutomaticFullscreen();running=false;clockBaseMs=elapsed*1000;clockAnchorLocalMs=null;drawLive()} function restartSaved(){clearSession();elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()} function discardSaved(){clearSession();list()}
-function confirmFinish(){if(confirm('Vill du avsluta passet?')){if(currentPositionMs()>=total(active.p)*1000)finishScreen();else{statsFinish(false);if(liveSession){void syncLiveSession('finished');liveSession=null}stop();clearSession();list()}}}
+function confirmFinish(){if(!confirm('Vill du avsluta passet?'))return;const completed=currentPositionMs()>=total(active.p)*1000;statsFinish(completed);if(liveSession){void syncLiveSession('finished');liveSession=null}endPlaybackUI();if(completed){finishScreen()}else{list()}}
 function showCue(s){
   let k=s.i+'-'+s.left;
   if(s.left>0 && s.left<=3 && cueKey!==k){
@@ -1283,7 +1287,7 @@ function toggle(){
   if(currentPositionMs()>=total(active.p)*1000)applyClockPosition(0,false);
   running=true;statsPlay();clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive();
 }
-function stop(){statsPause();if(running)applyClockPosition(currentPositionMs(),false);running=false;if(timer){clearInterval(timer);timer=null}}
+function stop(){if(prestartTimer){clearInterval(prestartTimer);prestartTimer=null}statsPause();if(running)applyClockPosition(currentPositionMs(),false);running=false;if(timer){clearInterval(timer);timer=null}}
 function syncLivePosition(positionMs,status){
   if(!liveSession?.id)return;
   const pos=Math.round(positionMs),anchorIso=new Date().toISOString();
