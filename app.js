@@ -1189,6 +1189,36 @@ function showCue(s){
 }
 function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;const pos=currentPositionMs();elapsed=Math.floor(pos/1000);if(pos<total(active.p)*1000){statsHeartbeat();saveSession();drawLive()}else finishScreen()},250)}
 
+// Hotfix 3: behåll knapparna monterade medan tid och passinformation uppdateras.
+// Det undviker förlorade klick när den tidigare 250 ms-uppdateringen byggde om hela vyn.
+function renderPlayerFrame(markup,view){
+  const existing=app.querySelector(view==='dashboard'?'.dashboard':'.live');
+  if(!existing){app.innerHTML=markup;updateFullscreenButton();return}
+  const temp=document.createElement('div');temp.innerHTML=markup;
+  const incoming=temp.querySelector(view==='dashboard'?'.dashboard':'.live');
+  if(!incoming){app.innerHTML=markup;return}
+  // Behåll actions och controls som samma DOM-element hela passet.
+  const oldActions=app.querySelector('.training-actions');
+  const newActions=temp.querySelector('.training-actions');
+  if(!oldActions||!newActions){app.innerHTML=markup;return}
+  const selectors=view==='dashboard'
+    ? ['.dash-grid','.dashboard-status']
+    : ['.liveTop','.liveProfile','.live > .muted'];
+  for(const selector of selectors){
+    const oldNode=existing.querySelector(selector);
+    const newNode=incoming.querySelector(selector);
+    if(oldNode&&newNode)oldNode.replaceWith(newNode);
+  }
+  const toggleButton=existing.querySelector('.controls button.primary');
+  if(toggleButton)toggleButton.textContent=running?'Ⅱ PAUS':'▶ START';
+  const badge=oldActions.querySelector('.pro-live-status');
+  const freshBadge=newActions.querySelector('.pro-live-status');
+  if(badge&&freshBadge){badge.textContent=freshBadge.textContent;badge.className=freshBadge.className}
+  else if(badge&&!freshBadge)badge.remove();
+  else if(!badge&&freshBadge)oldActions.appendChild(freshBadge);
+  updateFullscreenButton();
+}
+
 function drawLive(){
   let p=active.p,T=total(p);
   if(elapsed>=T){finishScreen();return}
@@ -1201,7 +1231,7 @@ function drawLive(){
   const switchButton=trainingActions();
 
   if(liveView==='dashboard'){
-    app.innerHTML=`${switchButton}<div class="dashboard">
+    renderPlayerFrame(`${switchButton}<div class="dashboard">
       <div class="dash-grid">
         <section class="dash-panel">
           <h3>PASSPROFIL</h3>
@@ -1255,11 +1285,11 @@ function drawLive(){
         <span>·</span>
         <span>${p.name}</span>
       </div>
-    </div>`;
+    </div>`,liveView);
     return;
   }
 
-  app.innerHTML=`${switchButton}
+  renderPlayerFrame(`${switchButton}
   <div class="live">
     <div class="liveTop">
       <div class="liveBrand"></div>
@@ -1295,7 +1325,7 @@ function drawLive(){
       <button onclick="confirmFinish()">■ AVSLUTA</button>
       <button onclick="next()">NÄSTA ▶</button>
     </div>
-  </div>`;
+  </div>`,liveView);
 }
 function toggle(){
   if(running){
