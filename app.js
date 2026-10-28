@@ -1153,7 +1153,25 @@ function clearSession(){localStorage.removeItem(SESSION_KEY)}
 function endPlaybackUI(){stop();clearSession();leavePlayerFullscreen()}
 function checkResume(){try{let x=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!x||!x.pass||x.elapsed<=0||x.elapsed>=total(x.pass))return;stop();active={p:x.pass};elapsed=x.elapsed;liveView=x.view||liveView;setBrand(x.pass.name,'');setHomeButton(false);app.innerHTML=`<div class="resume-box"><h2>Återuppta pass?</h2><p><b>${x.pass.name}</b></p><p class="muted">Sparad position: ${fmt(x.elapsed)}</p><div class="actions"><button class="primary" onclick="resumePass()">ÅTERUPPTA</button><button onclick="restartSaved()">BÖRJA OM</button><button onclick="discardSaved()">MINA PASS</button></div></div>`}catch(e){}}
 function resumePass(){requestAutomaticFullscreen();running=false;clockBaseMs=elapsed*1000;clockAnchorLocalMs=null;drawLive()} function restartSaved(){clearSession();elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()} function discardSaved(){clearSession();list()}
-function confirmFinish(){if(!confirm('Vill du avsluta passet?'))return;const completed=currentPositionMs()>=total(active.p)*1000;statsFinish(completed);if(liveSession){void syncLiveSession('finished');liveSession=null}endPlaybackUI();if(completed){finishScreen()}else{list()}}
+function closeFinishDialog(){document.querySelector('#finishConfirmOverlay')?.remove()}
+function confirmFinish(){
+  if(document.querySelector('#finishConfirmOverlay'))return;
+  const overlay=document.createElement('div');
+  overlay.id='finishConfirmOverlay';
+  overlay.className='overlay';
+  overlay.style.zIndex='10000';
+  overlay.innerHTML=`<div class="finish-confirm-box" role="dialog" aria-modal="true" aria-labelledby="finishConfirmTitle"><h2 id="finishConfirmTitle">Vill du avsluta passet?</h2><p>Passet avslutas och du återgår till Mina pass.</p><div class="actions" style="justify-content:center"><button type="button" onclick="closeFinishDialog()">FORTSÄTT PASSET</button><button type="button" class="primary" onclick="completeConfirmedFinish()">AVSLUTA PASSET</button></div></div>`;
+  document.body.appendChild(overlay);
+}
+function completeConfirmedFinish(){
+  closeFinishDialog();
+  if(!active?.p)return;
+  const completed=currentPositionMs()>=total(active.p)*1000;
+  statsFinish(completed);
+  if(liveSession){void syncLiveSession('finished');liveSession=null}
+  endPlaybackUI();
+  if(completed)finishScreen();else list();
+}
 function showCue(s){
   let k=s.i+'-'+s.left;
   if(s.left>0 && s.left<=3 && cueKey!==k){
