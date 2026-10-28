@@ -27,8 +27,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='BETA 1.0'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','BETA 1.0')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='BETA 1.01'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','BETA 1.01')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -198,10 +198,24 @@ async function loadRegistries(){
   if(registryErrors.length) console.warn('Registerfel',registryErrors);
   return registryErrors.length===0;
 }
+
+async function showPassStats(){
+ if(!isAdmin())return;
+ statsFinish(false);stop();setAppBrand();setHomeButton(true);
+ app.innerHTML=`${userTools()}<h1>Passstatistik</h1><p class="muted">Registrerade pass efter minst 2 minuters aktiv körning. Kortare pass registreras när de slutförs.</p><div id="passStats">Laddar…</div>`;
+ try{
+  const rows=await api('pass_playbacks?select=id,pass_name,activity_name,mode,started_at,active_seconds,planned_seconds,status&order=started_at.desc&limit=500')||[];
+  const complete=rows.filter(x=>x.status==='completed').length;
+  const box=document.querySelector('#passStats');if(!box)return;
+  box.innerHTML=`<div class="stats-summary"><div><b>${rows.length}</b><span>Registrerade</span></div><div><b>${complete}</b><span>Slutförda</span></div><div><b>${rows.length-complete}</b><span>Avbrutna / ofullständiga</span></div></div><div class="adminbox user-admin-scroll"><table class="admin-table"><thead><tr><th>Start</th><th>Pass</th><th>Aktivitet</th><th>Läge</th><th>Aktiv tid</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fmtDateTime(r.started_at)}</td><td>${escAttr(r.pass_name)}</td><td>${escAttr(r.activity_name||'')}</td><td>${r.mode==='pro'?'Pro':'Standard'}</td><td>${fmt(r.active_seconds||0)}</td><td>${r.status==='completed'?'Slutfört':r.status==='aborted'?'Avbrutet':'Ofullständigt'}</td><td>${isSuper()?`<button class="smallbtn" onclick="deletePassStat('${r.id}')">Radera</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+ }catch(e){const box=document.querySelector('#passStats');if(box)box.textContent='Kunde inte hämta statistik: '+e.message;}
+}
+async function deletePassStat(id){if(!isSuper()||!confirm('Radera denna statistikpost permanent?'))return;try{await api('pass_playbacks?id=eq.'+encodeURIComponent(id),{method:'DELETE'});showPassStats()}catch(e){alert('Kunde inte radera: '+e.message)}}
+
 function userTools(){
   const name=currentProfile?.display_name||auth?.user?.email||'Användare';
   return `<div class="toplinks">
-    ${auth&&isAdmin()?`<button class="iconbtn" title="Användare" aria-label="Användare" onclick="showUsers()">♙</button><button class="iconbtn" title="Register" aria-label="Register" onclick="showRegisters()">☷</button>`:''}
+    ${auth&&isAdmin()?`<button class="iconbtn" title="Användare" aria-label="Användare" onclick="showUsers()">♙</button><button class="iconbtn" title="Statistik" aria-label="Statistik" onclick="showPassStats()">▥</button><button class="iconbtn" title="Register" aria-label="Register" onclick="showRegisters()">☷</button>`:''}
     <button class="iconbtn" title="Inställningar" aria-label="Inställningar" onclick="showSettings()">⚙</button>
     <button class="iconbtn" title="Hjälp" aria-label="Hjälp" onclick="showHelp()">?</button>
     ${auth?`<details class="usermenu"><summary>👤 ${escAttr(name)} ▾</summary><div class="usermenu-pop"><div><b>${escAttr(name)}</b><small>${roleLabel(currentProfile?.role)}</small></div><button onclick="signOut()">Logga ut</button></div></details>`:`<button onclick="login()">LOGGA IN</button>`}
@@ -345,7 +359,7 @@ async function createPassFromMusic(){
 
 function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Beta 1.0</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Beta 1.01</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -621,7 +635,7 @@ function setSync(state,msg){
 }
 async function loadPasses(){
   const cached=loadCache();
-  // Beta 1.0: built-in demo passes are no longer shown. Keep only real cached passes.
+  // Beta 1.01: built-in demo passes are no longer shown. Keep only real cached passes.
   const cachedReal=cached.filter(p=>p.id!=='demo-short' && p.id!=='demo-local' && !p.builtIn);
   const legacyLocal=cachedReal.filter(p=>!p.remote).map(p=>({...p,legacyLocal:true,visibility:'private'}));
   passes=cachedReal;
@@ -720,7 +734,7 @@ function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.pa
 function activityName(p){return registries.activities.find(x=>x.id===p.activity_type_id)?.name||'Spinning'}
 function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_id)?.name||'Borg'}
 function list(){
-  stop(); setAppBrand(); setHomeButton(false);
+  statsFinish(false);stop(); setAppBrand(); setHomeButton(false);
   const legacyCount=passes.filter(p=>p.legacyLocal).length;
   app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><div class="toprow-actions">${isSuper()?`<button onclick="showMusicImport()">🎵 SKAPA PASS FRÅN MUSIKLISTA</button>`:''}<button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div></div>
   ${legacyCount?`<div class="legacy-banner"><b>${legacyCount} äldre lokalt ${legacyCount===1?'pass':'sparade pass'} hittades.</b> Flytta ${legacyCount===1?'det':'dem'} till Mina Pass så sparas ${legacyCount===1?'det':'de'} centralt som Privat.</div>`:''}
@@ -1010,7 +1024,7 @@ async function runWithPro(i){
   const p=passes[i];
   try{
     liveSession=await createLiveSession(p);
-    stop();active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;running=false;
+    stop();statsFinish(false);active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;running=false;
     setBrand(p.name,'TRAINING PLAYER PRO');setHomeButton(false);
     const activity=activityName(p),model=modelName(p),minutes=Math.round(total(p)/60);
     const hostName=currentProfile?.display_name||'';
@@ -1018,10 +1032,11 @@ async function runWithPro(i){
   }catch(e){console.error(e);alert('Kunde inte skapa Pro-session: '+e.message)}
 }
 function startProPass(){
+  requestAutomaticFullscreen();
   const p=active.p;
   if(settings.soundPrestart||settings.soundBlock)unlockAudio();
   setBrand(p.name,'PRO SESSION');setHomeButton(false);
-  applyClockPosition(0,false);running=false;beginPass(settings.prestart||0);
+  statsFinish(false);statsNewRun(p);applyClockPosition(0,false);running=false;beginPass(settings.prestart||0);
 }
 async function cancelLiveSession(){
   if(liveSession?.id){try{applyClockPosition(currentPositionMs(),false);await syncLiveSession('finished')}catch{}}
@@ -1046,13 +1061,54 @@ function unlockAudio(){
   }
  }catch(e){console.warn('Audio setup failed',e)}
 }
+
+// Beta 1.01: qualified playback statistics. No writes before 120 seconds of active playback.
+const STATS_MIN_MS=120000;
+let statsRun=null;
+function statsNewRun(p){
+ statsRun={id:crypto.randomUUID(),secret:crypto.randomUUID(),pass:p,mode:liveSession?'pro':'standard',host:auth?.user?.id||null,
+  startedAt:new Date().toISOString(),activeMs:0,anchor:null,registered:false,ended:false,writing:Promise.resolve()};
+}
+function statsActiveMs(){return statsRun?statsRun.activeMs+(statsRun.anchor?Math.max(0,Date.now()-statsRun.anchor):0):0}
+function statsPause(){if(statsRun?.anchor){statsRun.activeMs=statsActiveMs();statsRun.anchor=null}}
+function statsPlay(){if(!statsRun||statsRun.ended)return;if(!statsRun.anchor)statsRun.anchor=Date.now()}
+function statsRpc(name,payload){return api('rpc/'+name,{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(payload)})}
+function statsQueue(fn){
+ const s=statsRun;if(!s)return;
+ s.writing=s.writing.catch(()=>{}).then(fn).catch(e=>console.warn('Passstatistik kunde inte sparas',e));
+}
+function statsQualify(force=false){
+ const s=statsRun;if(!s||s.ended||s.registered||(!force&&statsActiveMs()<STATS_MIN_MS))return;
+ s.registered=true;const recordedSeconds=Math.floor(statsActiveMs()/1000);
+ statsQueue(()=>statsRpc('record_pass_playback',{
+  p_id:s.id,p_secret:s.secret,p_pass_id:s.pass.remote?s.pass.id:null,p_pass_name:s.pass.name,
+  p_activity:activityName(s.pass),p_mode:s.mode,p_host:s.host,p_started_at:s.startedAt,
+  p_planned_seconds:total(s.pass),p_active_seconds:recordedSeconds
+ }));
+}
+function statsFinish(completed){
+ const s=statsRun;if(!s||s.ended)return;
+ statsPause();const seconds=Math.floor(s.activeMs/1000);
+ statsQualify(completed&&total(s.pass)<120);
+ if(s.registered){statsQueue(()=>statsRpc('finish_pass_playback',{
+  p_id:s.id,p_secret:s.secret,p_active_seconds:seconds,p_completed:completed
+ }));}
+ s.ended=true;statsRun=null;
+}
+function statsHeartbeat(){
+ const s=statsRun;if(!s||s.ended||!running)return;
+ statsQualify();
+ if(s.registered){const seconds=Math.floor(statsActiveMs()/1000);if(seconds-(s.lastSent||0)>=30){s.lastSent=seconds;statsQueue(()=>statsRpc('heartbeat_pass_playback',{p_id:s.id,p_secret:s.secret,p_active_seconds:seconds}));}}
+}
+
 function startPlayer(p){
+ requestAutomaticFullscreen();
  // Lås upp Web Audio direkt i användarens klickhändelse (viktigt i Safari/iPad).
  if(settings.soundPrestart||settings.soundBlock)unlockAudio();
- stop();setBrand(p.name,'');setHomeButton(false);active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;
+ stop();statsFinish(false);statsNewRun(p);setBrand(p.name,'');setHomeButton(false);active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;
  beginPass(settings.prestart||0);
 }
-function beginPass(n){if(n)runPrestart(n);else{running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive()}}
+function beginPass(n){if(n)runPrestart(n);else{running=true;statsPlay();clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive()}}
 function beep(freq=880,duration=.11){
  try{
   if(!beep.countdown)unlockAudio();
@@ -1073,24 +1129,27 @@ function runPrestart(n){
  }
  const render=()=>app.innerHTML=`<div class="overlay"><div><h2>PASS STARTAR OM</h2><div class="prestart-number ${left<=3?'pulse':''}">${left}</div>${liveSession?'<div class="pro-countdown-label">TRAINING PLAYER PRO · STARTAR</div>':''}</div></div>`;
  render();
- prestartTimer=setInterval(()=>{left--;if(left<=0){clearInterval(prestartTimer);prestartTimer=null;running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive()}else{if(settings.soundPrestart&&left<=3)beep(left===1?1100:880,left===1?.18:.10);render()}},1000);
+ prestartTimer=setInterval(()=>{left--;if(left<=0){clearInterval(prestartTimer);prestartTimer=null;running=true;statsPlay();clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive()}else{if(settings.soundPrestart&&left<=3)beep(left===1?1100:880,left===1?.18:.10);render()}},1000);
 }
 function state(){let p=active.p,c=0;for(let i=0;i<p.parts.length;i++){let d=sec(p.parts[i].time);if(elapsed<c+d)return{i,part:p.parts[i],into:elapsed-c,left:d-(elapsed-c)};c+=d}return{i:p.parts.length-1,part:p.parts.at(-1),into:sec(p.parts.at(-1).time),left:0}}
 function switchView(){liveView=liveView==='clean'?'dashboard':'clean';localStorage.setItem('friskis-live-view',liveView);drawLive()}
-function finishScreen(){if(liveSession){applyClockPosition(total(active.p)*1000,false);void syncLiveSession('finished')}stop();clearSession();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
-function restartPass(){liveSession=null;elapsed=0;running=false;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()}
+function finishScreen(){statsFinish(true);if(liveSession){applyClockPosition(total(active.p)*1000,false);void syncLiveSession('finished')}stop();clearSession();setBrand(active.p.name,'');setHomeButton(true);app.innerHTML=`<div class="finish"><div><img class="finish-logo" src="friskis-logo.png" alt=""><h1>PASS KLART!</h1><p>Bra jobbat</p><div class="actions" style="justify-content:center;margin-top:30px"><button class="primary" onclick="restartPass()">▶ KÖR IGEN</button><button onclick="list()">MINA PASS</button></div></div></div>`}
+function restartPass(){requestAutomaticFullscreen();liveSession=null;statsFinish(false);statsNewRun(active.p);elapsed=0;running=false;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()}
 function controls(){return `<div class="controls"><button onclick="prev()">◀ FÖREGÅENDE</button><button class="primary" onclick="toggle()">${running?'Ⅱ PAUS':'▶ START'}</button><button onclick="confirmFinish()">■ AVSLUTA</button><button onclick="next()">NÄSTA ▶</button></div>`}
 
 
 
 function trainingActions(){return `<div class="training-actions"><div class="training-actions-buttons"><button onclick="switchView()">▣ BYT VY</button><button onclick="toggleFullscreen()">⛶ HELSKÄRM</button><button onclick="goHome()">MINA PASS</button></div>${proStatusBadge()}</div>`}
+function requestAutomaticFullscreen(){
+ try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen){const p=document.documentElement.requestFullscreen();if(p?.catch)p.catch(e=>console.info('Automatisk helskärm kunde inte aktiveras',e));}}catch(e){console.info('Automatisk helskärm stöds inte',e)}
+}
 async function toggleFullscreen(){try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}catch(e){alert('Helskärm stöds inte fullt ut i den här webbläsaren. Prova Lägg till på hemskärmen på iPad/iPhone.')}}
-function goHome(){if(liveSession&&liveSession.status!=='finished'){if(!confirm('Det finns en aktiv Pro-session. Vill du avsluta den och gå till Mina Pass?'))return;applyClockPosition(currentPositionMs(),false);void syncLiveSession('finished');liveSession=null}stop();clearSession();setHomeButton(false);list()}
+function goHome(){statsFinish(false);if(liveSession&&liveSession.status!=='finished'){if(!confirm('Det finns en aktiv Pro-session. Vill du avsluta den och gå till Mina Pass?'))return;applyClockPosition(currentPositionMs(),false);void syncLiveSession('finished');liveSession=null}stop();clearSession();setHomeButton(false);list()}
 function saveSession(){if(active&&active.p)localStorage.setItem(SESSION_KEY,JSON.stringify({pass:active.p,elapsed,view:liveView}))}
 function clearSession(){localStorage.removeItem(SESSION_KEY)}
 function checkResume(){try{let x=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(!x||!x.pass||x.elapsed<=0||x.elapsed>=total(x.pass))return;stop();active={p:x.pass};elapsed=x.elapsed;liveView=x.view||liveView;setBrand(x.pass.name,'');setHomeButton(false);app.innerHTML=`<div class="resume-box"><h2>Återuppta pass?</h2><p><b>${x.pass.name}</b></p><p class="muted">Sparad position: ${fmt(x.elapsed)}</p><div class="actions"><button class="primary" onclick="resumePass()">ÅTERUPPTA</button><button onclick="restartSaved()">BÖRJA OM</button><button onclick="discardSaved()">MINA PASS</button></div></div>`}catch(e){}}
-function resumePass(){running=false;clockBaseMs=elapsed*1000;clockAnchorLocalMs=null;drawLive()} function restartSaved(){clearSession();elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()} function discardSaved(){clearSession();list()}
-function confirmFinish(){if(confirm('Vill du avsluta passet?'))finishScreen()}
+function resumePass(){requestAutomaticFullscreen();running=false;clockBaseMs=elapsed*1000;clockAnchorLocalMs=null;drawLive()} function restartSaved(){clearSession();elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;drawLive()} function discardSaved(){clearSession();list()}
+function confirmFinish(){if(confirm('Vill du avsluta passet?')){if(currentPositionMs()>=total(active.p)*1000)finishScreen();else{statsFinish(false);if(liveSession){void syncLiveSession('finished');liveSession=null}stop();clearSession();list()}}}
 function showCue(s){
   let k=s.i+'-'+s.left;
   if(s.left>0 && s.left<=3 && cueKey!==k){
@@ -1106,7 +1165,7 @@ function showCue(s){
     });
   }
 }
-function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;const pos=currentPositionMs();elapsed=Math.floor(pos/1000);if(pos<total(active.p)*1000){saveSession();drawLive()}else finishScreen()},250)}
+function startTicker(){if(timer)clearInterval(timer);timer=setInterval(()=>{if(!running)return;const pos=currentPositionMs();elapsed=Math.floor(pos/1000);if(pos<total(active.p)*1000){statsHeartbeat();saveSession();drawLive()}else finishScreen()},250)}
 
 function drawLive(){
   let p=active.p,T=total(p);
@@ -1218,13 +1277,13 @@ function drawLive(){
 }
 function toggle(){
   if(running){
-    const pos=currentPositionMs();running=false;applyClockPosition(pos,false);if(timer){clearInterval(timer);timer=null}
+    const pos=currentPositionMs();statsPause();running=false;applyClockPosition(pos,false);if(timer){clearInterval(timer);timer=null}
     if(liveSession)void syncLiveSession('paused');saveSession();drawLive();return;
   }
   if(currentPositionMs()>=total(active.p)*1000)applyClockPosition(0,false);
-  running=true;clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive();
+  running=true;statsPlay();clockAnchorLocalMs=Date.now();if(liveSession)void syncLiveSession('running');saveSession();startTicker();drawLive();
 }
-function stop(){if(running)applyClockPosition(currentPositionMs(),false);running=false;if(timer){clearInterval(timer);timer=null}}
+function stop(){statsPause();if(running)applyClockPosition(currentPositionMs(),false);running=false;if(timer){clearInterval(timer);timer=null}}
 function syncLivePosition(positionMs,status){
   if(!liveSession?.id)return;
   const pos=Math.round(positionMs),anchorIso=new Date().toISOString();
