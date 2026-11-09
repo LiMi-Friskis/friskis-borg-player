@@ -285,7 +285,7 @@ async function analyzeMusicScreenshots(){
  try{
   const uploads=[];for(const f of files)uploads.push({name:f.name,data_url:f.type==='application/pdf'||/\.pdf$/i.test(f.name)?await fileAsDataUrl(f):await optimizedImageDataUrl(f)});
   const data=await musicImportEdge({files:uploads,title_hint:''});
-  if(data.schedule_rows?.length){scheduleImportDraft={title:data.source_title,rows:data.schedule_rows,items:data.items||[],pages:data.pages||[],model:data.schedule_rows.some(x=>x.borg!=null)?'borg':'ftp'};showScheduleImportPreview();return}
+  if(data.schedule_rows?.length){scheduleImportDraft={title:data.source_title,rows:data.schedule_rows,items:data.items||[],pages:data.pages||[],model:null};chooseScheduleIntensity();return}
   musicImportDraft={title:data.source_title||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
   if(!musicImportDraft.items.length)throw Error('Inga träningsrader eller musikposter hittades.');
   showMusicImportPreview();
@@ -301,18 +301,47 @@ function sortSchedulePages(){
  // Each extracted row retains its source filename; stable order within each file.
  d.pages.sort((a,b)=>a.page_number!=null&&b.page_number!=null?a.page_number-b.page_number:a.page_number!=null?-1:b.page_number!=null?1:a.original_index-b.original_index);
  const rank=new Map(d.pages.map((p,i)=>[p.name,i]));d.rows=d.rows.map((r,i)=>({...r,_original:i})).sort((a,b)=>(rank.get(a.source_file)??999)-(rank.get(b.source_file)??999)||a._original-b._original);
- d.rows.forEach(r=>{const page=d.pages.find(p=>p.name===r.source_file);r.source_page=page?.page_number??null});showScheduleImportPreview();
+ d.rows.forEach(r=>{const page=d.pages.find(p=>p.name===r.source_file);r.source_page=page?.page_number??null});chooseScheduleIntensity();
 }
-function showScheduleImportPreview(){
- const d=scheduleImportDraft;if(!d)return showMusicImport();setBrand('FRISKIS TRAINING PLAYER','FILIMPORT · BETA 1.02');setHomeButton(true);
- const hasBorg=d.rows.some(r=>r.borg!=null),hasFtp=d.rows.some(r=>r.ftp_percent!=null);
- app.innerHTML=`${userTools()}<div class="music-import-shell wide"><div class="music-step">2 AV 3 · GRANSKA TRÄNINGSSCHEMA</div><h1>Förhandsgranska pass</h1><p class="muted">Tiderna i träningsschemat gäller. Ingen jämförelse görs mot rubrikernas tider. Kontrollera AI-tolkningen innan du skapar passet.</p>
- <label>Passnamn <input style="width:100%;max-width:440px" value="${escAttr(d.title)}" oninput="scheduleImportDraft.title=this.value"></label>
- <div class="field"><label>Intensitetsmodell</label><select onchange="scheduleImportDraft.model=this.value"><option value="borg" ${d.model==='borg'?'selected':''} ${!hasBorg?'disabled':''}>Borg (6–20)</option><option value="ftp" ${d.model==='ftp'?'selected':''} ${!hasFtp?'disabled':''}>% FTP</option></select></div>
- <h3>Sidordning</h3><div id="schedulePageOrder" class="music-file-preview"></div><button onclick="sortSchedulePages()">SORTERA EFTER SIDNUMMER</button>
- <div class="music-preview-table"><table class="admin-table"><thead><tr><th>#</th><th>Sida</th><th>Tid</th><th>Moment</th><th>Beskrivning</th><th>Borg</th><th>% FTP</th><th>RPM</th><th></th></tr></thead><tbody>${d.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.source_page??'?'}</td><td><input style="width:76px" value="${fmt(r.duration_sec)}" oninput="scheduleImportDraft.rows[${i}].duration_sec=parseMusicDuration(this.value)"></td><td><input value="${escAttr(r.moment)}" oninput="scheduleImportDraft.rows[${i}].moment=this.value"></td><td><input value="${escAttr(r.description)}" oninput="scheduleImportDraft.rows[${i}].description=this.value"></td><td><input style="width:55px" type="number" value="${r.borg??''}" oninput="scheduleImportDraft.rows[${i}].borg=this.value===''?null:+this.value"></td><td><input style="width:65px" type="number" value="${r.ftp_percent??''}" oninput="scheduleImportDraft.rows[${i}].ftp_percent=this.value===''?null:+this.value"></td><td>${escAttr(r.rpm||'')}</td><td>${r.confidence<.8?'⚠️':''}</td></tr>`).join('')}</tbody></table></div>
- <div class="music-preview-actions"><button onclick="showMusicImport()">TILLBAKA</button><button class="primary" onclick="createPassFromSchedule()">SKAPA PASS</button></div></div>`;
- scheduleImportPageOrder();
+// The import opens directly in the existing editor after model selection.
+// No database write occurs until the user clicks SPARA PASS.
+function scheduleMidpoint(value){
+ if(value==null||String(value).trim()==='')return null;
+ if(typeof value==='number')return Number.isFinite(value)?Math.round(value):null;
+ const t=String(value).replace(/[–—−]/g,'-').replace(/,/g,'.').trim();
+ const match=t.match(/^(\d+(?:\.\d+)?)\s*(?:-|till)\s*(\d+(?:\.\d+)?)$/i);
+ if(match)return Math.round((Number(match[1])+Number(match[2]))/2);
+ const n=Number(t);return Number.isFinite(n)?Math.round(n):null;
+}
+function chooseScheduleIntensity(){
+ const d=scheduleImportDraft;if(!d)return;
+ const borg=d.rows.some(r=>scheduleMidpoint(r.borg)!=null);
+ const ftp=d.rows.some(r=>r.ftp_percent!=null&&r.ftp_percent!=='');
+ if(!borg&&!ftp){alert('Inga Borg- eller FTP-värden hittades. Kontrollera underlaget.');return}
+ if(borg&&ftp){
+  setBrand('FRISKIS TRAINING PLAYER','FILIMPORT · BETA 1.02');setHomeButton(true);
+  app.innerHTML=`<div class="music-import-shell" style="max-width:680px;margin:8vh auto"><div class="music-step">VÄLJ INTENSITETSMODELL</div><h1>Borg och FTP har upptäckts</h1><p class="muted">Vilken intensitetsmodell vill du använda för det importerade passet?</p><div class="actions"><button class="primary" onclick="openImportedSchedule('borg')">BORG (6–20)</button><button class="primary" onclick="openImportedSchedule('ftp')">% FTP</button><button onclick="showMusicImport()">AVBRYT</button></div></div>`;
+ }else openImportedSchedule(borg?'borg':'ftp');
+}
+function openImportedSchedule(modelCode){
+ const d=scheduleImportDraft;if(!d||!isSuper())return;
+ const model=registries.models.find(m=>m.code===modelCode);
+ if(!model){alert('Intensitetsmodellen saknas i registervården.');return}
+ if(!d.rows.length||d.rows.some(r=>!Number.isInteger(r.duration_sec)||r.duration_sec<=0)){
+  alert('En eller flera tidsrader saknar giltig tid.');return;
+ }
+ const activity=registries.activities.find(x=>x.code==='spinning')||registries.activities[0];
+ const allowed=registries.values.filter(v=>v.intensity_model_id===model.id&&v.is_active!==false&&v.numeric_value!=null).map(v=>+v.numeric_value);
+ const parts=d.rows.map((r,i)=>{
+  const raw=scheduleMidpoint(r.borg);
+  const borg=raw==null?12:allowed.length?allowed.reduce((best,n)=>Math.abs(n-raw)<Math.abs(best-raw)?n:best,allowed[0]):Math.max(6,Math.min(20,raw));
+  return {id:Date.now()+i+Math.random(),time:fmt(r.duration_sec),borg,intensity:modelCode==='ftp'?ftpIntensityCode(r.ftp_percent??0,model.id):'',moment:r.moment||'',instruction:[r.description,r.rpm?'RPM '+r.rpm:''].filter(Boolean).join(' · ')};
+ });
+ if((modelCode==='borg'&&d.rows.some(r=>scheduleMidpoint(r.borg)==null))||(modelCode==='ftp'&&d.rows.some(r=>r.ftp_percent==null))){
+  if(!confirm('Några intensitetsvärden saknas. Fortsätta med standardvärden för dessa rader?'))return;
+ }
+ active={i:null,p:{id:null,name:d.title||'Importerat träningspass',parts,owner_id:auth.user.id,visibility:'private',activity_type_id:activity?.id||null,intensity_model_id:model.id,remote:false}};
+ scheduleImportDraft=null;setAppBrand();setHomeButton(true);drawEdit();
 }
 function ftpIntensityCode(value,modelId){
  const v=registries.values.filter(x=>x.intensity_model_id===modelId&&x.is_active!==false).sort(regSort);
@@ -321,21 +350,6 @@ function ftpIntensityCode(value,modelId){
  if(exact)return exact.code;
  const range=v.find(x=>(x.min_value==null||value>=+x.min_value)&&(x.max_value==null||value<=+x.max_value));
  return (range||v[0]).code;
-}
-async function createPassFromSchedule(){
- const d=scheduleImportDraft;if(!d||!isSuper())return;
- if(!d.rows.length||d.rows.some(r=>!Number.isInteger(r.duration_sec)||r.duration_sec<=0)){alert('Kontrollera att alla tidsrader har giltiga tider.');return}
- const model=registries.models.find(m=>m.code===d.model);if(!model){alert('Vald intensitetsmodell saknas i registervården.');return}
- const activity=registries.activities.find(x=>x.code==='spinning')||registries.activities[0];
- const parts=d.rows.map((r,i)=>({id:Date.now()+i+Math.random(),time:fmt(r.duration_sec),borg:d.model==='borg'?(r.borg??12):12,intensity:d.model==='ftp'?ftpIntensityCode(r.ftp_percent??0,model.id):'',moment:r.moment||'',instruction:[r.description,r.rpm?'RPM '+r.rpm:''].filter(Boolean).join(' · ')}));
- if(d.model==='borg'&&d.rows.some(r=>r.borg==null)||d.model==='ftp'&&d.rows.some(r=>r.ftp_percent==null)){
-  if(!confirm('Några intensitetsvärden saknas. Vill du skapa passet med standardvärden på dessa rader?'))return;
- }
- try{
-  const name=await uniqueImportedPassName(d.title||'Importerat träningspass');
-  const passDraft={id:null,name,parts,owner_id:auth.user.id,visibility:'private',activity_type_id:activity?.id||null,intensity_model_id:model.id,remote:false};
-  const saved=await upsertPass(passDraft,true);passes.unshift(saved);cache();scheduleImportDraft=null;active={p:structuredClone(saved),i:0};drawEdit();
- }catch(e){alert('Kunde inte skapa passet: '+e.message)}
 }
 function musicPreviewRow(x,i){
   return `<tr data-music-row="${i}"><td class="music-order">${i+1}</td><td><select onchange="musicImportDraft.items[${i}].type=this.value;showMusicImportPreview()"><option value="track" ${x.type==='track'?'selected':''}>Låt</option><option value="pause" ${x.type==='pause'?'selected':''}>PAUSE</option></select></td><td>${x.type==='track'?`<input value="${escAttr(x.artist||'')}" oninput="musicImportDraft.items[${i}].artist=this.value">`:''}</td><td>${x.type==='track'?`<input value="${escAttr(x.title||'')}" oninput="musicImportDraft.items[${i}].title=this.value">`:'<b>PAUSE</b>'}</td><td><input class="music-time-input" value="${musicDurationText(x.duration_sec)}" onblur="musicImportDraft.items[${i}].duration_sec=parseMusicDuration(this.value);this.value=musicDurationText(musicImportDraft.items[${i}].duration_sec);refreshMusicStats()"></td><td>${x.confidence!=null&&x.confidence<.8?'<span class="music-review">Kontrollera</span>':'<span class="music-ok">OK</span>'}</td><td><button class="iconbtn small danger" onclick="removeMusicItem(${i})">×</button></td></tr>`;
