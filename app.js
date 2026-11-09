@@ -236,21 +236,18 @@ function musicCounts(items){
 let musicSelectedFiles=[];
 function showMusicImport(){
   if(!auth){login();return}
-  if(!isSuper()){alert('Music Import v0.1 är endast tillgänglig för Super Users.');return}
-  stop();setBrand('FRISKIS TRAINING PLAYER','MUSIC IMPORT v0.1');setHomeButton(true);musicImportDraft=null;
-  musicSelectedFiles=[];
-  app.innerHTML=`${userTools()}<div class="music-import-shell"><div class="music-step">1 AV 3 · SCREENSHOTS</div><h1>Skapa pass från musiklista</h1><p class="muted">Ladda upp en eller flera screenshots från FitnessPlayer. Musiklistans namn hämtas automatiskt från bilderna och överlapp dedupliceras.</p>
-    <div class="music-upload-card">
-    <label class="music-drop" id="musicDropZone" for="musicScreenshots" ondragenter="musicDragEnter(event)" ondragover="musicDragOver(event)" ondragleave="musicDragLeave(event)" ondrop="musicDrop(event)"><b>📷 Dra screenshots hit eller klicka för att välja</b><span>PNG, JPG eller WEBP · flera bilder går bra</span></label><input id="musicScreenshots" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple onchange="setMusicFiles(this.files)"><div id="musicFilePreview" class="music-file-preview"></div></div>
-    <div class="actions"><button class="primary" id="analyzeMusicBtn" onclick="analyzeMusicScreenshots()">ANALYSERA MUSIKLISTA</button><button onclick="list()">AVBRYT</button></div>
-    <div class="muted music-privacy">Bilderna används endast för analys i importflödet och sparas inte i Training Player-databasen.</div></div>`;
+  if(!isSuper()){alert('Filimport kräver Super User.');return}
+  stop();setBrand('FRISKIS TRAINING PLAYER','FILIMPORT · BETA 1.02');setHomeButton(true);musicImportDraft=null;musicSelectedFiles=[];
+  app.innerHTML=`${userTools()}<div class="music-import-shell"><div class="music-step">1 AV 3 · FILER</div><h1>Skapa pass från fil</h1><p class="muted">Importera träningsscheman eller musiklistor som PDF, PNG, JPG eller WEBP. Sidnummer används för att sortera schemat.</p>
+  <div class="music-upload-card"><label class="music-drop" id="musicDropZone" for="musicScreenshots" ondragenter="musicDragEnter(event)" ondragover="musicDragOver(event)" ondragleave="musicDragLeave(event)" ondrop="musicDrop(event)"><b>📄 Dra filer hit eller klicka för att välja</b><span>PDF, PNG, JPG, WEBP · högst 10 filer</span></label><input id="musicScreenshots" class="sr-only" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple onchange="setMusicFiles(this.files)"><div id="musicFilePreview" class="music-file-preview"></div></div>
+  <div class="actions"><button class="primary" id="analyzeMusicBtn" onclick="analyzeMusicScreenshots()">ANALYSERA FILER</button><button onclick="list()">AVBRYT</button></div><div class="muted music-privacy">Filerna skickas för AI-analys men sparas inte som filer i Training Player.</div></div>`;
 }
-function validMusicImageFile(f){return f && /^image\/(png|jpeg|webp)$/i.test(f.type)}
-function setMusicFiles(files){
-  const incoming=[...(files||[])].filter(validMusicImageFile);
-  if(!incoming.length){if(files?.length)alert('Välj PNG, JPG eller WEBP.');return}
-  musicSelectedFiles=incoming.slice(0,10);
-  previewMusicFiles(musicSelectedFiles);
+function validMusicImageFile(f){return f&&(/^(image\/(png|jpeg|webp)|application\/pdf)$/i.test(f.type)||/\.pdf$/i.test(f.name))}
+function setMusicFiles(files){const incoming=[...(files||[])];if(!incoming.length)return;
+ if(incoming.some(f=>!validMusicImageFile(f))){alert('Endast PDF, PNG, JPG och WEBP stöds.');return}
+ if(incoming.length>10){alert('Välj högst 10 filer.');return}
+ if(incoming.some(f=>f.size>10*1024*1024)){alert('Varje fil får vara högst 10 MB.');return}
+ musicSelectedFiles=incoming;previewMusicFiles(incoming);
 }
 function musicDragEnter(e){e.preventDefault();e.stopPropagation();document.querySelector('#musicDropZone')?.classList.add('drag-over')}
 function musicDragOver(e){e.preventDefault();e.stopPropagation();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';document.querySelector('#musicDropZone')?.classList.add('drag-over')}
@@ -260,9 +257,13 @@ function musicDrop(e){
   const files=e.dataTransfer?.files;if(files?.length)setMusicFiles(files);
 }
 function previewMusicFiles(files){
-  const box=document.querySelector('#musicFilePreview');if(!box)return;box.innerHTML='';
-  [...files].forEach((f,i)=>{const u=URL.createObjectURL(f);box.insertAdjacentHTML('beforeend',`<div class="music-file"><img src="${u}" alt="Screenshot ${i+1}"><div><b>Bild ${i+1}</b><small>${escAttr(f.name)} · ${Math.round(f.size/1024)} KB</small></div></div>`)})
+ const box=document.querySelector('#musicFilePreview');if(!box)return;box.innerHTML='';
+ files.forEach((f,i)=>{const pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);const u=pdf?null:URL.createObjectURL(f);
+ const el=document.createElement('div');el.className='music-file';el.innerHTML=`${pdf?'<span style="font-size:28px">📄</span>':`<img src="${u}" alt="Fil ${i+1}">`}<div><b>Fil ${i+1}</b><small>${escAttr(f.name)} · ${Math.round(f.size/1024)} KB</small></div>`;box.appendChild(el);
+ if(u)el.querySelector('img').onload=()=>URL.revokeObjectURL(u);
+ });
 }
+function fileAsDataUrl(f){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)})}
 async function optimizedImageDataUrl(file){
   const raw=await new Promise((ok,bad)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=bad;r.readAsDataURL(file)});
   const img=await new Promise((ok,bad)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=bad;i.src=raw});
@@ -279,16 +280,62 @@ async function musicImportEdge(payload,retry=true){
   if(!res.ok)throw new Error(data.error||data.message||('HTTP '+res.status));return data;
 }
 async function analyzeMusicScreenshots(){
-  if(!isSuper())return;
-  const files=[...musicSelectedFiles];
-  if(!files.length){alert('Välj minst en screenshot.');return}
-  const btn=document.querySelector('#analyzeMusicBtn');btn.disabled=true;btn.textContent='ANALYSERAR…';
-  try{
-    const images=[];for(let i=0;i<files.length;i++)images.push({name:files[i].name,data_url:await optimizedImageDataUrl(files[i])});
-    const data=await musicImportEdge({title_hint:'',images});
-    musicImportDraft={title:data.source_title||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
-    await createPassFromMusic();
-  }catch(e){alert('Kunde inte analysera musiklistan: '+e.message);btn.disabled=false;btn.textContent='ANALYSERA MUSIKLISTA'}
+ if(!isSuper())return;const files=[...musicSelectedFiles];if(!files.length){alert('Välj minst en fil.');return}
+ const btn=document.querySelector('#analyzeMusicBtn');btn.disabled=true;btn.textContent='ANALYSERAR…';
+ try{
+  const uploads=[];for(const f of files)uploads.push({name:f.name,data_url:f.type==='application/pdf'||/\.pdf$/i.test(f.name)?await fileAsDataUrl(f):await optimizedImageDataUrl(f)});
+  const data=await musicImportEdge({files:uploads,title_hint:''});
+  if(data.schedule_rows?.length){scheduleImportDraft={title:data.source_title,rows:data.schedule_rows,items:data.items||[],pages:data.pages||[],model:data.schedule_rows.some(x=>x.borg!=null)?'borg':'ftp'};showScheduleImportPreview();return}
+  musicImportDraft={title:data.source_title||'Importerad musiklista',items:(data.items||[]).map((x,i)=>({...x,_id:crypto.randomUUID(),order:i+1})),deduplicated_count:data.deduplicated_count||0,screenshot_count:files.length};
+  if(!musicImportDraft.items.length)throw Error('Inga träningsrader eller musikposter hittades.');
+  showMusicImportPreview();
+ }catch(e){alert('Kunde inte analysera filerna: '+e.message);btn.disabled=false;btn.textContent='ANALYSERA FILER'}
+}
+let scheduleImportDraft=null;
+function scheduleImportPageOrder(){
+ const d=scheduleImportDraft;const box=document.querySelector('#schedulePageOrder');if(!box)return;
+ box.innerHTML=d.pages.map((p,i)=>`<div class="music-file"><span>📄</span><div><b>${escAttr(p.name)}</b><small>Sidnummer: <input style="width:70px" type="number" value="${p.page_number??''}" placeholder="okänt" onchange="scheduleImportDraft.pages[${i}].page_number=this.value===''?null:Number(this.value)"></small></div></div>`).join('');
+}
+function sortSchedulePages(){
+ const d=scheduleImportDraft;
+ // Each extracted row retains its source filename; stable order within each file.
+ d.pages.sort((a,b)=>a.page_number!=null&&b.page_number!=null?a.page_number-b.page_number:a.page_number!=null?-1:b.page_number!=null?1:a.original_index-b.original_index);
+ const rank=new Map(d.pages.map((p,i)=>[p.name,i]));d.rows=d.rows.map((r,i)=>({...r,_original:i})).sort((a,b)=>(rank.get(a.source_file)??999)-(rank.get(b.source_file)??999)||a._original-b._original);
+ d.rows.forEach(r=>{const page=d.pages.find(p=>p.name===r.source_file);r.source_page=page?.page_number??null});showScheduleImportPreview();
+}
+function showScheduleImportPreview(){
+ const d=scheduleImportDraft;if(!d)return showMusicImport();setBrand('FRISKIS TRAINING PLAYER','FILIMPORT · BETA 1.02');setHomeButton(true);
+ const hasBorg=d.rows.some(r=>r.borg!=null),hasFtp=d.rows.some(r=>r.ftp_percent!=null);
+ app.innerHTML=`${userTools()}<div class="music-import-shell wide"><div class="music-step">2 AV 3 · GRANSKA TRÄNINGSSCHEMA</div><h1>Förhandsgranska pass</h1><p class="muted">Tiderna i träningsschemat gäller. Ingen jämförelse görs mot rubrikernas tider. Kontrollera AI-tolkningen innan du skapar passet.</p>
+ <label>Passnamn <input style="width:100%;max-width:440px" value="${escAttr(d.title)}" oninput="scheduleImportDraft.title=this.value"></label>
+ <div class="field"><label>Intensitetsmodell</label><select onchange="scheduleImportDraft.model=this.value"><option value="borg" ${d.model==='borg'?'selected':''} ${!hasBorg?'disabled':''}>Borg (6–20)</option><option value="ftp" ${d.model==='ftp'?'selected':''} ${!hasFtp?'disabled':''}>% FTP</option></select></div>
+ <h3>Sidordning</h3><div id="schedulePageOrder" class="music-file-preview"></div><button onclick="sortSchedulePages()">SORTERA EFTER SIDNUMMER</button>
+ <div class="music-preview-table"><table class="admin-table"><thead><tr><th>#</th><th>Sida</th><th>Tid</th><th>Moment</th><th>Beskrivning</th><th>Borg</th><th>% FTP</th><th>RPM</th><th></th></tr></thead><tbody>${d.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.source_page??'?'}</td><td><input style="width:76px" value="${fmt(r.duration_sec)}" oninput="scheduleImportDraft.rows[${i}].duration_sec=parseMusicDuration(this.value)"></td><td><input value="${escAttr(r.moment)}" oninput="scheduleImportDraft.rows[${i}].moment=this.value"></td><td><input value="${escAttr(r.description)}" oninput="scheduleImportDraft.rows[${i}].description=this.value"></td><td><input style="width:55px" type="number" value="${r.borg??''}" oninput="scheduleImportDraft.rows[${i}].borg=this.value===''?null:+this.value"></td><td><input style="width:65px" type="number" value="${r.ftp_percent??''}" oninput="scheduleImportDraft.rows[${i}].ftp_percent=this.value===''?null:+this.value"></td><td>${escAttr(r.rpm||'')}</td><td>${r.confidence<.8?'⚠️':''}</td></tr>`).join('')}</tbody></table></div>
+ <div class="music-preview-actions"><button onclick="showMusicImport()">TILLBAKA</button><button class="primary" onclick="createPassFromSchedule()">SKAPA PASS</button></div></div>`;
+ scheduleImportPageOrder();
+}
+function ftpIntensityCode(value,modelId){
+ const v=registries.values.filter(x=>x.intensity_model_id===modelId&&x.is_active!==false).sort(regSort);
+ if(!v.length)return '';
+ const exact=v.find(x=>x.numeric_value!=null&&+x.numeric_value===+value);
+ if(exact)return exact.code;
+ const range=v.find(x=>(x.min_value==null||value>=+x.min_value)&&(x.max_value==null||value<=+x.max_value));
+ return (range||v[0]).code;
+}
+async function createPassFromSchedule(){
+ const d=scheduleImportDraft;if(!d||!isSuper())return;
+ if(!d.rows.length||d.rows.some(r=>!Number.isInteger(r.duration_sec)||r.duration_sec<=0)){alert('Kontrollera att alla tidsrader har giltiga tider.');return}
+ const model=registries.models.find(m=>m.code===d.model);if(!model){alert('Vald intensitetsmodell saknas i registervården.');return}
+ const activity=registries.activities.find(x=>x.code==='spinning')||registries.activities[0];
+ const parts=d.rows.map((r,i)=>({id:Date.now()+i+Math.random(),time:fmt(r.duration_sec),borg:d.model==='borg'?(r.borg??12):12,intensity:d.model==='ftp'?ftpIntensityCode(r.ftp_percent??0,model.id):'',moment:r.moment||'',instruction:[r.description,r.rpm?'RPM '+r.rpm:''].filter(Boolean).join(' · ')}));
+ if(d.model==='borg'&&d.rows.some(r=>r.borg==null)||d.model==='ftp'&&d.rows.some(r=>r.ftp_percent==null)){
+  if(!confirm('Några intensitetsvärden saknas. Vill du skapa passet med standardvärden på dessa rader?'))return;
+ }
+ try{
+  const name=await uniqueImportedPassName(d.title||'Importerat träningspass');
+  const passDraft={id:null,name,parts,owner_id:auth.user.id,visibility:'private',activity_type_id:activity?.id||null,intensity_model_id:model.id,remote:false};
+  const saved=await upsertPass(passDraft,true);passes.unshift(saved);cache();scheduleImportDraft=null;active={p:structuredClone(saved),i:0};drawEdit();
+ }catch(e){alert('Kunde inte skapa passet: '+e.message)}
 }
 function musicPreviewRow(x,i){
   return `<tr data-music-row="${i}"><td class="music-order">${i+1}</td><td><select onchange="musicImportDraft.items[${i}].type=this.value;showMusicImportPreview()"><option value="track" ${x.type==='track'?'selected':''}>Låt</option><option value="pause" ${x.type==='pause'?'selected':''}>PAUSE</option></select></td><td>${x.type==='track'?`<input value="${escAttr(x.artist||'')}" oninput="musicImportDraft.items[${i}].artist=this.value">`:''}</td><td>${x.type==='track'?`<input value="${escAttr(x.title||'')}" oninput="musicImportDraft.items[${i}].title=this.value">`:'<b>PAUSE</b>'}</td><td><input class="music-time-input" value="${musicDurationText(x.duration_sec)}" onblur="musicImportDraft.items[${i}].duration_sec=parseMusicDuration(this.value);this.value=musicDurationText(musicImportDraft.items[${i}].duration_sec);refreshMusicStats()"></td><td>${x.confidence!=null&&x.confidence<.8?'<span class="music-review">Kontrollera</span>':'<span class="music-ok">OK</span>'}</td><td><button class="iconbtn small danger" onclick="removeMusicItem(${i})">×</button></td></tr>`;
@@ -736,7 +783,7 @@ function modelName(p){return registries.models.find(x=>x.id===p.intensity_model_
 function list(){
   statsFinish(false);stop(); setAppBrand(); setHomeButton(false);
   const legacyCount=passes.filter(p=>p.legacyLocal).length;
-  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><div class="toprow-actions">${isSuper()?`<button onclick="showMusicImport()">🎵 SKAPA PASS FRÅN MUSIKLISTA</button>`:''}<button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div></div>
+  app.innerHTML=`${userTools()}<div class="toprow"><div><h1>Mina pass</h1><div class="muted">${auth?'Inloggad som '+escAttr(currentProfile?.display_name||auth.user?.email||'användare')+' · '+roleLabel(currentProfile?.role):'Publika pass kan köras utan inloggning'} <span id="syncState" class="sync"><span class="sync-dot"></span></span></div></div><div class="toprow-actions">${isSuper()?`<button onclick="showMusicImport()">📄 SKAPA PASS FRÅN FIL</button>`:''}<button class="primary" onclick="${auth?'edit()':'login()'}">+ SKAPA NYTT PASS</button></div></div>
   ${legacyCount?`<div class="legacy-banner"><b>${legacyCount} äldre lokalt ${legacyCount===1?'pass':'sparade pass'} hittades.</b> Flytta ${legacyCount===1?'det':'dem'} till Mina Pass så sparas ${legacyCount===1?'det':'de'} centralt som Privat.</div>`:''}
   <div class="cards">${passes.map((p,i)=>`<div class="card"><h2>${escAttr(p.name)}</h2><div><span class="badge">${activityName(p)}</span><span class="badge">${modelName(p)}</span>${p.builtIn?`<span class="badge">Demo</span>`:`<span class="badge">${p.visibility==='private'?'🔒 Privat':'🌐 Publikt'}</span>`}${auth&&p.remote?`<span class="badge ownerbadge">👤 ${escAttr(ownerName(p))}</span>`:''}</div><div class="muted" style="margin-top:8px">${fmt(total(p))} · ${p.parts.length} delar</div>${p.legacyLocal?`<div class="pass-storage legacy"><i></i>Äldre lokalt pass · flytta till Mina Pass</div>`:p.remote?`<div class="pass-storage remote"><i></i>Centralt sparat</div>`:''}${bars(p)}
   <div class="actions"><button class="primary" onclick="run(${i})">▶ KÖR PASSET</button>${isSuper()&&p.remote&&!p.legacyLocal?`<button class="pro-button" onclick="runWithPro(${i})">📱 KÖR MED PRO</button>`:''}${p.legacyLocal?`${auth?`<button onclick="importLocalPass(${i})">SPARA SOM PRIVAT</button>`:`<button onclick="login()">LOGGA IN FÖR ATT SPARA</button>`}`:auth&&canEditPass(p)?`<button onclick="edit(${i})">REDIGERA</button><button onclick="duplicate(${i})">DUPLICERA</button><button onclick="del(${i})">RADERA</button>`:auth&&(p.remote||p.builtIn)?`<button onclick="duplicate(${i})">DUPLICERA</button>`:''}</div></div>`).join('')}</div>`;
