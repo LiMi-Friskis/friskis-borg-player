@@ -790,21 +790,6 @@ function zoneTextClass(p,part){
 function intensityColor(p,part){const m=intensityModel(p),v=intensityValue(p,part);if(!m||m.code==='borg')return v?.color_hex||color(part.borg);return v?.color_hex||'#888888'}
 function intensityHeight(p,part){const m=intensityModel(p);if(!m||m.code==='borg')return Math.max(15,(part.borg-6)/14*100);const vals=intensityValues(p),v=intensityValue(p,part),i=Math.max(0,vals.findIndex(x=>x.id===v?.id));return vals.length?Math.max(20,((i+1)/vals.length)*100):50}
 function intensityHeading(p){const m=intensityModel(p);return (!m||m.code==='borg')?'BORG':(m.name||'INTENSITET').toUpperCase()}
-// Visuell markering av mycket korta intervaller. Påverkar inte blockens bredd eller tidsaxeln.
-function shortIntervalMarkers(p){
-  const T=total(p)||1;
-  let start=0;
-  return p.parts.map(x=>{
-    const duration=sec(x.time);
-    const center=(start+duration/2)/T*100;
-    start+=duration;
-    if(duration<=0||duration>8)return '';
-    const height=intensityHeight(p,x);
-    const shade=intensityColor(p,x);
-    return `<span aria-hidden="true" title="Kort intervall: ${escAttr(x.time)}" style="position:absolute;left:${center}%;bottom:0;transform:translateX(-50%);width:1px;min-width:1px;height:${height}%;background:${shade};z-index:3;pointer-events:none"></span>`;
-  }).join('');
-}
-
 function bars(p,cls='mini'){let T=total(p)||1;return `<div class="${cls}">${p.parts.map(x=>`<div class="bar" title="${escAttr(intensityLabel(p,x))}" style="width:${sec(x.time)/T*100}%;height:${intensityHeight(p,x)}%;background:${intensityColor(p,x)}"></div>`).join('')}</div>`}
 
 function activityName(p){return registries.activities.find(x=>x.id===p.activity_type_id)?.name||'Spinning'}
@@ -1313,7 +1298,6 @@ function drawLive(){
           <h3>PASSPROFIL</h3>
           <div class="dash-profile">
             ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${intensityHeight(p,x)}%;background:${intensityColor(p,x)}"></div>`).join('')}
-      ${shortIntervalMarkers(p)}
             <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div>
           </div>
           <div class="dash-stats">
@@ -1391,7 +1375,6 @@ function drawLive(){
 
     <div class="liveProfile">
       ${p.parts.map(x=>`<div class="bar" style="width:${sec(x.time)/(T||1)*100}%;height:${intensityHeight(p,x)}%;background:${intensityColor(p,x)}"></div>`).join('')}
-      ${shortIntervalMarkers(p)}
       <div class="marker" style="left:${Math.min(100,elapsed/(T||1)*100)}%"></div>
     </div>
 
