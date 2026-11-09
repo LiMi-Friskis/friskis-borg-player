@@ -801,7 +801,7 @@ function shortIntervalMarkers(p){
     if(duration<=0||duration>8)return '';
     const height=intensityHeight(p,x);
     const shade=intensityColor(p,x);
-    return `<span aria-hidden="true" title="Kort intervall: ${escAttr(x.time)}" style="position:absolute;left:${center}%;bottom:0;transform:translateX(-50%);width:4px;min-width:4px;height:${height}%;background:${shade};box-shadow:0 0 0 1px #05090b;z-index:3;pointer-events:none"></span>`;
+    return `<span aria-hidden="true" title="Kort intervall: ${escAttr(x.time)}" style="position:absolute;left:${center}%;bottom:0;transform:translateX(-50%);width:2px;min-width:2px;height:${height}%;background:${shade};z-index:3;pointer-events:none"></span>`;
   }).join('');
 }
 
