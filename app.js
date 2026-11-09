@@ -13,6 +13,8 @@ let settings=Object.assign({prestart:10,soundPrestart:true,soundBlock:false},JSO
 
 let passes=[], active=null, elapsed=0, running=false, timer=null, online=true;
 let liveSession=null;
+let anonymousProToken=null;
+let autoProEnabled=false;
 let clockBaseMs=0, clockAnchorLocalMs=null;
 let musicImportDraft=null;
 let liveView=localStorage.getItem('friskis-live-view')||'clean';
@@ -27,8 +29,8 @@ const sec=t=>{let [m,s]=String(t).split(':').map(Number);return (m||0)*60+(s||0)
 const fmt=s=>`${Math.floor(Math.max(0,s)/60)}:${String(Math.max(0,s)%60).padStart(2,'0')}`;
 function color(b){b=+b;if(b<=9)return'#7DD3FC';if(b<=12)return'#2563EB';if(b<=14)return'#22C55E';if(b<=17)return'#FACC15';if(b<=19)return'#EF4444';return'#5B0A0A'}
 function total(p){return p.parts.reduce((a,x)=>a+sec(x.time),0)}
-function setBrand(title='FRISKIS TRAINING PLAYER',sub='BETA 1.01'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
-function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','BETA 1.01')}
+function setBrand(title='FRISKIS TRAINING PLAYER',sub='BETA 1.02.2'){brandTitle.textContent=title;brandSub.innerHTML=sub;brandSub.style.display=sub?'block':'none'}
+function setAppBrand(){setBrand('FRISKIS TRAINING PLAYER','BETA 1.02.2')}
 function setHomeButton(show=true){homeBtn.style.display=show?'inline-block':'none'}
 function cache(){localStorage.setItem(KEY,JSON.stringify(passes))}
 function loadCache(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}
@@ -418,9 +420,34 @@ async function createPassFromMusic(){
   }catch(e){console.error(e);alert('Kunde inte skapa passet: '+e.message)}
 }
 
-function showSettings(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div><div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`}
+async function fetchAutoProSetting(){
+  const rows=await api('app_config?key=eq.auto_pro_all_passes&select=value');
+  autoProEnabled=rows?.[0]?.value===true;
+  return autoProEnabled;
+}
+async function showSettings(){
+  setAppBrand();setHomeButton(true);
+  let autoProRow='';
+  if(isSuper()){
+    try{
+      await fetchAutoProSetting();
+      autoProRow=`<div class="settingrow"><span><b>Starta alla pass i Pro-läge</b><br><small>Startar Pro osynligt när instruktören kör ett centralt sparat pass. Passet visas bland öppna pass för deltagarna.</small></span><input type="checkbox" ${autoProEnabled?'checked':''} onchange="updateAutoProSetting(this)"></div>`;
+    }catch(e){autoProRow=`<div class="settingrow"><span>Automatiskt Pro-läge kunde inte läsas: ${escAttr(e.message)}. Kontrollera databasinstallationen.</span></div>`}
+  }
+  app.innerHTML=`<div class="settingsbox"><h1>Inställningar</h1><div class="settingrow"><span>Förstart</span><select onchange="settings.prestart=+this.value;saveSettings()"><option value="10" ${settings.prestart==10?'selected':''}>10 sekunder</option><option value="0" ${settings.prestart==0?'selected':''}>Direktstart</option></select></div><div class="settingrow"><span>Ljud under förstart</span><input type="checkbox" ${settings.soundPrestart?'checked':''} onchange="settings.soundPrestart=this.checked;saveSettings()"></div><div class="settingrow"><span>Ljud vid blockbyte</span><input type="checkbox" ${settings.soundBlock?'checked':''} onchange="settings.soundBlock=this.checked;saveSettings()"></div>${autoProRow}<div class="actions"><button class="primary" onclick="list()">KLAR</button></div><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div></div>`;
+}
+async function updateAutoProSetting(input){
+  if(!isSuper())return;
+  const wanted=input.checked;input.disabled=true;
+  try{
+    await api('app_config?key=eq.auto_pro_all_passes',{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({value:wanted})});
+    await fetchAutoProSetting();
+    if(autoProEnabled!==wanted)throw new Error('Inställningen kunde inte sparas.');
+  }catch(e){input.checked=!wanted;alert('Kunde inte spara Pro-inställningen: '+e.message)}
+  finally{input.disabled=false}
+}
 function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Beta 1.01</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
+function showHelp(){setAppBrand();setHomeButton(true);app.innerHTML=`<div class="helpbox"><h1>Friskis Training Player</h1><p><b>Beta 1.02.2</b></p><p>Skapa, redigera och kör träningspass med valbar aktivitet och intensitetsmodell. Borg använder exakta nivåer och FTP zoner i % FTP.</p><p class="muted">Admin och Super User kan under Registervård administrera aktiviteter, intensitetsmodeller, intensitetsvärden, moment och beskrivningsförslag.</p><p class="muted">Publika pass kan köras utan inloggning. Inloggning krävs för att skapa eller redigera pass.</p><h3>Om</h3><p>Utvecklad av LiMi Equus AB</p><div class="copyright">© 2026 LiMi Equus AB. Alla rättigheter förbehållna.</div><div class="actions"><button class="primary" onclick="list()">MINA PASS</button></div></div>`}
 
 function fmtDateTime(value){
   if(!value)return '—';
@@ -1002,7 +1029,23 @@ async function del(i){
   passes.splice(i,1);cache();list();
 }
 
-function run(i){liveSession=null;startPlayer(passes[i])}
+async function run(i){
+  const p=passes[i];
+  // Läs central inställning vid varje start, så även andra instruktörers ändringar gäller.
+  let automatic=false;
+  try{automatic=await fetchAutoProSetting()}
+  catch(e){console.warn('Kunde inte kontrollera automatisk Pro-start',e);alert('Kan inte kontrollera Pro-inställningen. Passet startades inte. Försök igen när anslutningen fungerar.');return}
+  if(!automatic){liveSession=null;anonymousProToken=null;startPlayer(p);return}
+  if(!p?.remote || !p?.id || (p.visibility!=='public' && !auth?.user?.id)){
+    alert('Automatiskt Pro-läge kräver ett centralt sparat publikt pass när instruktören inte är inloggad.');return;
+  }
+  try{
+    // Starta sessionen direkt; visa aldrig Pro-anslutningsskärmen.
+    const session=await createLiveSession(p,true);
+    stop();statsFinish(false);liveSession=session;
+    startProPass(p);
+  }catch(e){console.error(e);alert('Pro-sessionen kunde inte startas: '+e.message+'\nPasset har inte startats.');}
+}
 
 function currentPositionMs(){
   const max=Math.max(0,total(active?.p||{parts:[]})*1000);
@@ -1050,10 +1093,17 @@ function buildPassSnapshot(p){
     totalDurationSec:total(p),blocks:p.parts.map((x,i)=>snapshotBlock(x,i,p))
   };
 }
-async function createLiveSession(p){
-  if(!isSuper())throw new Error('Kör med Pro är bara tillgängligt för Super Users under piloten.');
+async function createLiveSession(p,automatic=false){
+  if(!automatic&&!isSuper())throw new Error('Kör med Pro är bara tillgängligt för Super Users under piloten.');
   if(!p?.remote||!p?.id)throw new Error('Passet måste vara centralt sparat innan det kan köras med Pro.');
   const snapshot=buildPassSnapshot(p);
+  if(automatic && !auth?.user?.id){
+    const result=await api('rpc/tp_start_anonymous_pro',{method:'POST',body:JSON.stringify({p_pass_id:p.id,p_snapshot:snapshot})});
+    if(!result?.session?.id || !result?.control_token)throw new Error('Inget sessions-ID eller kontrollnyckel returnerades');
+    anonymousProToken=result.control_token;
+    return result.session;
+  }
+  anonymousProToken=null;
   const rows=await api('live_sessions',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify({
     pass_id:p.id,host_user_id:auth.user.id,status:'ready',current_block_index:0,
     started_at:null,clock_anchor_at:null,position_ms:0,countdown_ends_at:null,pass_snapshot:snapshot,ended_at:null
@@ -1062,7 +1112,9 @@ async function createLiveSession(p){
 }
 async function patchLiveSession(patch){
   if(!liveSession?.id)return null;
-  const rows=await api('live_sessions?id=eq.'+encodeURIComponent(liveSession.id),{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(patch)});
+  const rows=anonymousProToken
+    ? await api('rpc/tp_update_anonymous_pro',{method:'POST',body:JSON.stringify({p_session_id:liveSession.id,p_control_token:anonymousProToken,p_patch:patch})})
+    : await api('live_sessions?id=eq.'+encodeURIComponent(liveSession.id),{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify(patch)});
   const row=Array.isArray(rows)?rows[0]:rows;
   if(row)liveSession={...liveSession,...row};else liveSession={...liveSession,...patch};
   return liveSession;
@@ -1092,16 +1144,17 @@ async function runWithPro(i){
     app.innerHTML=`<div class="pro-ready"><div class="pro-ready-card participant-waiting"><div class="pro-kicker">TRAINING PLAYER PRO</div><div class="pro-activity">${escAttr(activity)}</div><h1 class="pro-pass-name">${escAttr(p.name)}</h1>${hostName?`<div class="pro-host">med ${escAttr(hostName)}</div>`:''}<div class="pro-waiting-state"><span class="pro-waiting-dot"></span><span>PASS STARTAR SNART</span></div><p class="pro-connect-text">Anslut till passet i <b>Training Player Pro</b> i din telefon</p><p class="pro-connect-help">När instruktören startar passet börjar nedräkningen automatiskt.</p><div class="pro-pass-meta">${escAttr(model)}${minutes?` · ${minutes} min`:''}</div><div class="pro-host-controls"><button class="primary pro-start-button" onclick="startProPass()">▶ STARTA PASS</button><button class="pro-cancel-button" onclick="cancelLiveSession()">AVBRYT</button></div></div></div>`;
   }catch(e){console.error(e);alert('Kunde inte skapa Pro-session: '+e.message)}
 }
-function startProPass(){
+function startProPass(p=active?.p){
   requestAutomaticFullscreen();
-  const p=active.p;
+  if(!p)return;
+  active={p};elapsed=0;clockBaseMs=0;clockAnchorLocalMs=null;running=false;
   if(settings.soundPrestart||settings.soundBlock)unlockAudio();
   setBrand(p.name,'PRO SESSION');setHomeButton(false);
   statsFinish(false);statsNewRun(p);applyClockPosition(0,false);running=false;beginPass(settings.prestart||0);
 }
 async function cancelLiveSession(){
   if(liveSession?.id){try{applyClockPosition(currentPositionMs(),false);await syncLiveSession('finished')}catch{}}
-  liveSession=null;stop();list();
+  liveSession=null;anonymousProToken=null;stop();list();
 }
 function proStatusBadge(){
   if(!liveSession)return '';
